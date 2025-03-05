@@ -58,8 +58,8 @@
 
 	onMount(async () => {
 		window.addEventListener('message', async (event) => {
-			if (
-				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:5173'].includes(
+			if ( // takin command:限制消息来源加上本地的localhost:3001
+				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:5173', 'http://localhost:3001'].includes(
 					event.origin
 				)
 			) {
