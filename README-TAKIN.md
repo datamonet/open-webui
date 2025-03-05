@@ -62,3 +62,15 @@
 1. 用户必须在 Takin 数据库中存在才能登录
 2. 所有 API 请求都需要进行认证
 3. 安全 cookie 配置依赖于环境变量
+
+环境变量
+```
+# 关闭注册
+WEBUI_AUTH=false
+# 公开 Takin API URL
+PUBLIC_TAKIN_API_URL=http://localhost:3000
+# 数据库连接字符串
+DATABASE_URL=postgresql://postgres:@localhost:5432/open-webui
+# WebUI 密钥,，保持和takin-test一致
+WEBUI_SECRET_KEY=Puaexx
+```
