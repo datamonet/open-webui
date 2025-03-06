@@ -59,7 +59,7 @@
 	onMount(async () => {
 		window.addEventListener('message', async (event) => {
 			if ( // takin command:限制消息来源加上本地的localhost:3001
-				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:5173', 'http://localhost:3001'].includes(
+				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:5173', 'http://localhost:3001', 'https://test-takin.ai', 'https://takin.ai'].includes(
 					event.origin
 				)
 			) {
