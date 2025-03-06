@@ -16,6 +16,8 @@ ARG USE_RERANKING_MODEL=""
 ARG USE_TIKTOKEN_ENCODING_NAME="cl100k_base"
 
 ARG BUILD_HASH=dev-build
+# Takin API URL for frontend
+ARG PUBLIC_TAKIN_API_URL
 # Override at your own risk - non-root configurations are untested
 ARG UID=0
 ARG GID=0
@@ -31,6 +33,7 @@ RUN npm ci
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
+ENV PUBLIC_TAKIN_API_URL=${PUBLIC_TAKIN_API_URL}
 RUN npm run build
 
 ######## WebUI backend ########
