@@ -16,8 +16,6 @@ ARG USE_RERANKING_MODEL=""
 ARG USE_TIKTOKEN_ENCODING_NAME="cl100k_base"
 
 ARG BUILD_HASH=dev-build
-# Takin API URL for frontend
-ARG PUBLIC_TAKIN_API_URL
 # Override at your own risk - non-root configurations are untested
 ARG UID=0
 ARG GID=0
@@ -25,6 +23,8 @@ ARG GID=0
 ######## WebUI frontend ########
 FROM --platform=$BUILDPLATFORM node:22-alpine3.20 AS build
 ARG BUILD_HASH
+# takin command:前端需要传入
+ARG PUBLIC_TAKIN_API_URL 
 
 WORKDIR /app
 
@@ -33,7 +33,9 @@ RUN npm ci
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
+# takin command:前端需要传入
 ENV PUBLIC_TAKIN_API_URL=${PUBLIC_TAKIN_API_URL}
+ENV NODE_OPTIONS="--max-old-space-size=10240"
 RUN npm run build
 
 ######## WebUI backend ########
