@@ -38,10 +38,11 @@ ALGORITHM = "HS256"
 # Auth Utils
 ##############
 
+# This class is from takin.ai - handles user credits for API usage
 class UserWithCredits(UserModel):
-    extraCredits: int = 0
-    subscriptionCredits: int = 0
-    subscriptionPurchasedCredits: int = 0
+    extraCredits: float = 0
+    subscriptionCredits: float = 0
+    subscriptionPurchasedCredits: float = 0
 
 
 def verify_signature(payload: str, signature: str) -> bool:
