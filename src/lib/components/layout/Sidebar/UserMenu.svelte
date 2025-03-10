@@ -9,6 +9,7 @@
 	import { fade, slide } from 'svelte/transition';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { userSignOut } from '$lib/apis/auths';
+	import { PUBLIC_TAKIN_API_URL } from '$env/static/public';
 
 	const i18n = getContext('i18n');
 
@@ -160,7 +161,8 @@
 					user.set(null);
 
 					localStorage.removeItem('token');
-					location.href = '/auth';
+					// takin command：退出登录后到takin
+					location.href = `${PUBLIC_TAKIN_API_URL}/signin`;
 
 					show = false;
 				}}
