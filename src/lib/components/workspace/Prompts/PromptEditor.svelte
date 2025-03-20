@@ -7,6 +7,7 @@
 	import AccessControl from '../common/AccessControl.svelte';
 	import LockClosed from '$lib/components/icons/LockClosed.svelte';
 	import AccessControlModal from '../common/AccessControlModal.svelte';
+	import { user } from '$lib/stores';
 
 	export let onSubmit: Function;
 	export let edit = false;
@@ -20,7 +21,17 @@
 	let command = '';
 	let content = '';
 
-	let accessControl = null;
+	// takin command: default private
+	let accessControl = {
+		read: {
+			group_ids: [],
+			user_ids: []
+		},
+		write: {
+			group_ids: [],
+			user_ids: []
+		}
+	};
 
 	let showAccessControlModal = false;
 
@@ -101,6 +112,8 @@
 						/>
 
 						<div class="self-center shrink-0">
+							<!-- takin command: admin only -->
+							{#if $user?.role === 'admin'}
 							<button
 								class="bg-gray-50 hover:bg-gray-100 text-black dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-white transition px-2 py-1 rounded-full flex gap-1 items-center"
 								type="button"
@@ -114,6 +127,7 @@
 									{$i18n.t('Access')}
 								</div>
 							</button>
+							{/if}
 						</div>
 					</div>
 
