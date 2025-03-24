@@ -47,10 +47,9 @@ def upload_file(
         # replace filename with uuid
         id = str(uuid.uuid4())
         name = filename
-        # filename = f"{id}_{filename}"
-        # takin command: add user_id as prefix to filename
-        filename = f"open-webui/{user.id}/{id}_{filename}"
-        contents, file_path = Storage.upload_file(file.file, filename)
+        filename = f"{id}_{filename}"
+        # takin command:takin code, add open-webui storage prefix
+        contents, file_path = Storage.upload_file(file.file, filename, user.id)
 
         file_item = Files.insert_new_file(
             user.id,
