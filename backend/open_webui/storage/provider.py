@@ -66,7 +66,7 @@ class LocalStorageProvider(StorageProvider):
         #takin command:takin code, add open-webui storage prefix.构建存储路径
         storage_path = filename
         if user_id:
-            storage_path = f"open-webui/{user_id}/{filename}"
+            storage_path = f"{user_id}/{filename}"
             
         file_path = f"{UPLOAD_DIR}/{storage_path}"
         
@@ -148,7 +148,7 @@ class S3StorageProvider(StorageProvider):
             # takin command:takin code, add open-webui storage prefix.构建 S3 存储路径
             s3_key = filename
             if user_id:
-                s3_key = f"open-webui/{user_id}/{filename}"
+                s3_key = f"{user_id}/{filename}"
             if self.key_prefix:
                 s3_key = os.path.join(self.key_prefix, s3_key)
                 
