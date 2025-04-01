@@ -83,6 +83,7 @@
 	bind:show={showAccessControlModal}
 	bind:accessControl
 	accessRoles={['read', 'write']}
+	allowPublic={$user?.permissions?.sharing?.public_prompts || $user?.role === 'admin'}
 />
 
 <div class="w-full max-h-full flex justify-center">
