@@ -523,7 +523,7 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
         raise HTTPException(500, detail=ERROR_MESSAGES.DEFAULT(err))
 
 
-# takin command：用户登出接口，删除所有相关cookie
+# takin code：用户登出接口，删除所有相关cookie
 @router.get("/signout")
 async def signout(request: Request, response: Response):
     response.delete_cookie("token")
@@ -560,7 +560,7 @@ async def signout(request: Request, response: Response):
 ############################
 
 
-# takin command：添加新用户的API端点，已去除管理员权限验证
+# takin code：添加新用户的API端点，已去除管理员权限验证
 @router.post("/add", response_model=SigninResponse)
 # async def add_user(form_data: AddUserForm, user=Depends(get_admin_user)):
 async def add_user(form_data: AddUserForm):

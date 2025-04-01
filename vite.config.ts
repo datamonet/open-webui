@@ -19,7 +19,7 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 export default defineConfig({
 	server: {
-		port: 3001 // takin command：指定端口
+		port: 3001 // takin code：指定端口
 	  },
 	plugins: [
 		sveltekit(),

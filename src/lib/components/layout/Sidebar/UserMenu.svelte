@@ -161,7 +161,7 @@
 					user.set(null);
 
 					localStorage.removeItem('token');
-					// takin command：退出登录后到takin
+					// takin code：退出登录后到takin
 					location.href = `${PUBLIC_TAKIN_API_URL}/signin`;
 
 					show = false;

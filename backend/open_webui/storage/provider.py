@@ -63,7 +63,7 @@ class LocalStorageProvider(StorageProvider):
         if not contents:
             raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
             
-        #takin command:takin code, add open-webui storage prefix.构建存储路径
+        #takin code:takin code, add open-webui storage prefix.构建存储路径
         storage_path = filename
         if user_id:
             storage_path = f"{user_id}/{filename}"
@@ -145,7 +145,7 @@ class S3StorageProvider(StorageProvider):
         """Handles uploading of the file to S3 storage."""
         _, file_path = LocalStorageProvider.upload_file(file, filename, user_id)
         try:
-            # takin command:takin code, add open-webui storage prefix.构建 S3 存储路径
+            # takin code:takin code, add open-webui storage prefix.构建 S3 存储路径
             s3_key = filename
             if user_id:
                 s3_key = f"{user_id}/{filename}"

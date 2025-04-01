@@ -1,5 +1,5 @@
 <script>
-	// takin command:导入takin；doc #https://svelte.dev/docs/kit/$env-static-public
+	// takin code:导入takin；doc #https://svelte.dev/docs/kit/$env-static-public
 	import { PUBLIC_TAKIN_API_URL } from '$env/static/public';
 	import { io } from 'socket.io-client';
 	import { spring } from 'svelte/motion';
@@ -499,7 +499,7 @@
 				// 根据配置初始化WebSocket连接
 				await setupSocket($config.features?.enable_websocket ?? true);
 
-				// takin command：尝试获取当前会话用户信息，使用本地存储的token
+				// takin code：尝试获取当前会话用户信息，使用本地存储的token
 				const sessionUser = await getSessionUser(localStorage.token).catch((error) => {			
 					// 如果获取失败，返回null（可能是token无效或过期）
 					return null;

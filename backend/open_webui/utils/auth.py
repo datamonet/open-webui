@@ -117,15 +117,15 @@ def verify_password(plain_password, hashed_password):
 
 def get_password_hash(password):
     return pwd_context.hash(password)
-# takin command
+# takin code
 use_secure_cookies = os.getenv("ENV") == "prod"
 takin_cookie_name = '__Secure-authjs.session-token' if use_secure_cookies else "authjs.session-token"
-# takin command：从请求中获取token
+# takin code：从请求中获取token
 def get_token(request: Request) -> str:
     cookie = request.cookies.get(takin_cookie_name)
     return cookie
 
-# takin command：删除用户token
+# takin code：删除用户token
 def del_token(response: Response):
     response.delete_cookie(
         key=takin_cookie_name,
@@ -178,7 +178,7 @@ def get_current_user(
     background_tasks: BackgroundTasks,
     auth_token: HTTPAuthorizationCredentials = Depends(bearer_security),
 ):
-    """takin command：用户认证装饰器
+    """takin code：用户认证装饰器
     
     处理两种认证方式：
     1. Takin token: 包含完整的用户信息和积分信息
