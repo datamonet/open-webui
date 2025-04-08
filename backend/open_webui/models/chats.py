@@ -907,7 +907,7 @@ class ChatTable:
                 return True
         except Exception:
             return False
-    # takin code: gpt4o_mini_assistant
+    # takin code: add get thread by id use assistant api model
     def get_thread_by_id(self, id: str) -> Optional[str]:
         chat = self.get_chat_by_id(id)
         if chat is None:
