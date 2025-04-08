@@ -439,6 +439,10 @@ async def generate_queries(
     else:
         template = DEFAULT_QUERY_GENERATION_PROMPT_TEMPLATE
 
+    # taking code: gpt4o_mini_assistant
+    if form_data.get("model") == 'gpt4o_mini_assistant':
+        template = "{{MESSAGES:END:6}}"
+        
     content = query_generation_template(
         template, form_data["messages"], {"name": user.name}
     )

@@ -1723,8 +1723,8 @@ async def process_chat_response(
                                                     content_blocks,
                                                 )
                                             )
-
-                                        if DETECT_CODE_INTERPRETER:
+                                        # takin code: gpt4o_mini_assistant
+                                        if DETECT_CODE_INTERPRETER or form_data.get("model") == 'gpt4o_mini_assistant':
                                             content, content_blocks, end = (
                                                 tag_content_handler(
                                                     "code_interpreter",
