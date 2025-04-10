@@ -277,6 +277,11 @@
 				};
 				reader.readAsDataURL(file);
 			} else {
+				// takin code:allow upload images file
+				toast.error(
+					$i18n.t('Selected model(s) only support image inputs')
+				);
+				return;
 				uploadFileHandler(file);
 			}
 		});
