@@ -161,7 +161,9 @@ async def generate_title(
     else:
         models = request.app.state.MODELS
 
-    model_id = form_data["model"]
+    # takin code: gen title function default model use gpt-4o-mini
+    model_id = 'gpt-4o-mini'
+    # model_id = form_data["model"]
     if model_id not in models:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -259,7 +261,9 @@ async def generate_chat_tags(
     else:
         models = request.app.state.MODELS
 
-    model_id = form_data["model"]
+    # takin code: gen tags function default model use gpt-4o-mini
+    model_id = 'gpt-4o-mini'
+    # model_id = form_data["model"]
     if model_id not in models:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -414,7 +418,9 @@ async def generate_queries(
     else:
         models = request.app.state.MODELS
 
-    model_id = form_data["model"]
+    # takin code: gen queries function default model use gpt-4o-mini
+    model_id = 'gpt-4o-mini'
+    # model_id = form_data["model"]
     if model_id not in models:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
