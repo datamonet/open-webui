@@ -3,7 +3,7 @@
 	import { v4 as uuidv4 } from 'uuid';
 	import { createPicker, getAuthToken } from '$lib/utils/google-drive-picker';
 	import { pickAndDownloadFile } from '$lib/utils/onedrive-file-picker';
-
+	import { PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS } from '$env/static/public';
 	import { onMount, tick, getContext, createEventDispatcher, onDestroy } from 'svelte';
 	const dispatch = createEventDispatcher();
 
@@ -277,11 +277,15 @@
 				};
 				reader.readAsDataURL(file);
 			} else {
-				// takin code:allow upload images file
-				toast.error(
-					$i18n.t('Selected model(s) only support image inputs')
-				);
-				return;
+				// 检查当前选中的模型是否在允许的特殊助手模型列表中
+				const specialModelIds = PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS.split(',');
+				const isSpecialModel = selectedModelIds.some(modelId => specialModelIds.includes(modelId));
+				
+				if (!isSpecialModel) {
+					toast.error($i18n.t('Selected model(s) only support image inputs'));
+					return;
+				}
+				
 				uploadFileHandler(file);
 			}
 		});

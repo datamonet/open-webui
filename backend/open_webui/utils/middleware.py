@@ -889,7 +889,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     try:
         #takin code:import assistant api model
-        SPECIAL_ASSISTANT_MODEL_IDS = os.getenv('SPECIAL_ASSISTANT_MODEL_IDS', 'gpt4o_mini_assistant').split(',')
+        SPECIAL_ASSISTANT_MODEL_IDS = os.getenv('PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS', 'gpt4o_mini_assistant').split(',')
 
         # takin code: assistant api model need skip file embedding
         if form_data.get("model") in SPECIAL_ASSISTANT_MODEL_IDS:
