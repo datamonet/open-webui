@@ -305,10 +305,59 @@ async def disconnect(sid):
         # print(f"Unknown session ID {sid} disconnected")
 
 
+async def update_database(event_data, request_info):
+    try:
+        if "type" not in event_data:
+            return
+
+        if not all(k in request_info for k in ["chat_id", "message_id"]):
+            log.error(f"Missing required fields in request_info: {request_info}")
+            return
+
+        if event_data["type"] == "status":
+            await Chats.add_message_status_to_chat_by_id_and_message_id(
+                request_info["chat_id"],
+                request_info["message_id"],
+                event_data.get("data", {}),
+            )
+        elif event_data["type"] == "message":
+            try:
+                message = await Chats.get_message_by_id_and_message_id(
+                    request_info["chat_id"],
+                    request_info["message_id"],
+                )
+                content = message.get("content", "") if message else ""
+                content += event_data.get("data", {}).get("content", "")
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    request_info["chat_id"],
+                    request_info["message_id"],
+                    {"content": content},
+                )
+            except Exception as e:
+                log.error(f"Error processing message update: {e}")
+                # 如果获取消息失败，仍然尝试保存新内容
+                content = event_data.get("data", {}).get("content", "")
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    request_info["chat_id"],
+                    request_info["message_id"],
+                    {"content": content},
+                )
+        elif event_data["type"] == "replace":
+            content = event_data.get("data", {}).get("content", "")
+            await Chats.upsert_message_to_chat_by_id_and_message_id(
+                request_info["chat_id"],
+                request_info["message_id"],
+                {"content": content},
+            )
+    except Exception as e:
+        log.error(f"Database update failed: {e}")
+        # 这里可以选择重试或者通知前端
+
 def get_event_emitter(request_info, update_db=True):
     async def __event_emitter__(event_data):
         user_id = request_info["user_id"]
-
+        
+        # 1. 获取所有需要发送消息的session
         session_ids = list(
             set(
                 USER_POOL.get(user_id, [])
@@ -320,8 +369,10 @@ def get_event_emitter(request_info, update_db=True):
             )
         )
 
+        # 2. 创建所有消息发送任务
+        emit_tasks = []
         for session_id in session_ids:
-            await sio.emit(
+            task = sio.emit(
                 "chat-events",
                 {
                     "chat_id": request_info.get("chat_id", None),
@@ -330,42 +381,15 @@ def get_event_emitter(request_info, update_db=True):
                 },
                 to=session_id,
             )
-
+            emit_tasks.append(task)
+        
+        # 3. 并行处理所有消息发送
+        if emit_tasks:
+            await asyncio.gather(*emit_tasks)
+        
+        # 4. 异步处理数据库写入
         if update_db:
-            if "type" in event_data and event_data["type"] == "status":
-                Chats.add_message_status_to_chat_by_id_and_message_id(
-                    request_info["chat_id"],
-                    request_info["message_id"],
-                    event_data.get("data", {}),
-                )
-
-            if "type" in event_data and event_data["type"] == "message":
-                message = Chats.get_message_by_id_and_message_id(
-                    request_info["chat_id"],
-                    request_info["message_id"],
-                )
-
-                content = message.get("content", "")
-                content += event_data.get("data", {}).get("content", "")
-
-                Chats.upsert_message_to_chat_by_id_and_message_id(
-                    request_info["chat_id"],
-                    request_info["message_id"],
-                    {
-                        "content": content,
-                    },
-                )
-
-            if "type" in event_data and event_data["type"] == "replace":
-                content = event_data.get("data", {}).get("content", "")
-
-                Chats.upsert_message_to_chat_by_id_and_message_id(
-                    request_info["chat_id"],
-                    request_info["message_id"],
-                    {
-                        "content": content,
-                    },
-                )
+            asyncio.create_task(update_database(event_data, request_info))
 
     return __event_emitter__
 
