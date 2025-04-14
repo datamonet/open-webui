@@ -306,28 +306,43 @@ async def disconnect(sid):
 
 
 async def update_database(event_data, request_info):
+    """takin code: 异步处理数据库更新操作，与消息发送解耦。
+
+    Args:
+        event_data (dict): 事件数据，包含消息类型和内容
+        request_info (dict): 请求信息，包含chat_id和message_id
+    """
     try:
+        # 验证事件类型是否存在
         if "type" not in event_data:
             return
 
+        # 验证必要的请求参数
         if not all(k in request_info for k in ["chat_id", "message_id"]):
             log.error(f"Missing required fields in request_info: {request_info}")
             return
 
+        # 处理状态更新事件
         if event_data["type"] == "status":
+            # 异步更新消息状态
             await Chats.add_message_status_to_chat_by_id_and_message_id(
                 request_info["chat_id"],
                 request_info["message_id"],
-                event_data.get("data", {}),
+                event_data.get("data", {}),  # 使用空字典作为默认值
             )
+        # 处理消息内容更新事件
         elif event_data["type"] == "message":
             try:
+                # 获取现有消息内容
                 message = await Chats.get_message_by_id_and_message_id(
                     request_info["chat_id"],
                     request_info["message_id"],
                 )
+                # 如果消息存在则获取内容，否则使用空字符串
                 content = message.get("content", "") if message else ""
+                # 追加新的消息内容
                 content += event_data.get("data", {}).get("content", "")
+                # 异步更新消息内容
                 await Chats.upsert_message_to_chat_by_id_and_message_id(
                     request_info["chat_id"],
                     request_info["message_id"],
@@ -383,11 +398,11 @@ def get_event_emitter(request_info, update_db=True):
             )
             emit_tasks.append(task)
         
-        # 3. 并行处理所有消息发送
+        # 3. takin code: 并行处理所有消息发送
         if emit_tasks:
             await asyncio.gather(*emit_tasks)
         
-        # 4. 异步处理数据库写入
+        # 4. takin code: 异步处理数据库写入
         if update_db:
             asyncio.create_task(update_database(event_data, request_info))
 

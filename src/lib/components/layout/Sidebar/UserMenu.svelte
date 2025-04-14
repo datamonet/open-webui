@@ -207,14 +207,15 @@
 							</span>
 						</div>
 
-						<div class=" ">
+						<!-- takin code: hidden active users -->
+						<!-- <div class=" ">
 							<span class="">
 								{$i18n.t('Active Users')}:
 							</span>
 							<span class=" font-semibold">
 								{$activeUserIds?.length}
 							</span>
-						</div>
+						</div> -->
 					</div>
 				</Tooltip>
 			{/if}
