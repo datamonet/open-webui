@@ -188,8 +188,8 @@
 				</div>
 				<div class=" self-center truncate">{$i18n.t('Sign Out')}</div>
 			</button>
-
-			{#if $activeUserIds?.length > 0}
+				<!-- takin code: hidden active users -->
+			<!-- {#if $activeUserIds?.length > 0}
 				<hr class=" border-gray-100 dark:border-gray-850 my-1 p-0" />
 
 				<Tooltip
@@ -207,18 +207,17 @@
 							</span>
 						</div>
 
-						<!-- takin code: hidden active users -->
-						<!-- <div class=" ">
+						<div class=" ">
 							<span class="">
 								{$i18n.t('Active Users')}:
 							</span>
 							<span class=" font-semibold">
 								{$activeUserIds?.length}
 							</span>
-						</div> -->
+						</div>
 					</div>
 				</Tooltip>
-			{/if}
+			{/if} -->
 
 			<!-- <DropdownMenu.Item class="flex items-center px-3 py-2 text-sm ">
 				<div class="flex items-center">Profile</div>
