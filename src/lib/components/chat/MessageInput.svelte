@@ -1136,7 +1136,8 @@
 											{/if}
 
 											{#if $_user}
-												{#if $config?.features?.enable_web_search && ($_user.role === 'admin' || $_user?.permissions?.features?.web_search)}
+											<!-- takin code: hidden assistant api web search -->
+												{#if $config?.features?.enable_web_search && ($_user.role === 'admin' || $_user?.permissions?.features?.web_search) && !selectedModelIds.some(modelId => PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS.split(',').includes(modelId))}
 													<Tooltip content={$i18n.t('Search the internet')} placement="top">
 														<button
 															on:click|preventDefault={() => (webSearchEnabled = !webSearchEnabled)}
