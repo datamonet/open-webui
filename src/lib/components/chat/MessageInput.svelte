@@ -81,6 +81,10 @@
 
 	export let imageGenerationEnabled = false;
 	export let webSearchEnabled = false;
+	// <!-- takin code: hidden assistant api web search -->
+	$: if (selectedModelIds?.some(modelId => PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS.split(',').includes(modelId))) {
+		webSearchEnabled = false;
+	}
 	export let codeInterpreterEnabled = false;
 
 	$: onChange({
