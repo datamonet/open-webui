@@ -49,7 +49,18 @@ if WEBSOCKET_MANAGER == "redis":
             password=redis_config["password"],
         )
     else:
-        mgr = socketio.AsyncRedisManager(WEBSOCKET_REDIS_URL)
+        mgr = socketio.AsyncRedisManager(
+                WEBSOCKET_REDIS_URL,
+                # Add connection pool configuration
+                redis_options={
+                    "socket_timeout": 60, # 60s
+                    "socket_connect_timeout": 30, # 30s
+                    "health_check_interval": 60, # 60s
+                    "retry_on_timeout": True,
+                    # Use a connection pool with a reasonable max_connections limit
+                    "max_connections": 200  # Adjust based on your needs
+                }
+            )
     sio = socketio.AsyncServer(
         cors_allowed_origins=[],
         async_mode="asgi",
@@ -116,6 +127,8 @@ async def periodic_redis_cleanup():
     - Only cleans up normal connections (preserves subscription connections)
     - Cleans up connections that have been idle for more than 1 hour
     """
+    CLEANUP_INTERVAL = 15 * 60  # 15 minutes
+    IDLE_TIMEOUT = 20 * 60  # 20 minutes
     while True:
         redis = None
         try:
@@ -137,7 +150,7 @@ async def periodic_redis_cleanup():
                             
                     # Check idle time
                     idle_seconds = int(client.get('idle', 0))
-                    if idle_seconds >= 3600:  # 1 hour
+                    if idle_seconds >= IDLE_TIMEOUT: 
                         addr = client.get('addr')
                         name = client.get('name', 'unnamed')
                         try:
@@ -166,8 +179,8 @@ async def periodic_redis_cleanup():
                 except Exception as e:
                     log.error(f"Failed to close Redis connection: {str(e)}")
         
-        # Run every hour
-        await asyncio.sleep(3600)
+        # Run every CLEANUP_INTERVAL
+        await asyncio.sleep(CLEANUP_INTERVAL)
 
 
 async def periodic_usage_pool_cleanup():
