@@ -110,6 +110,66 @@ else:
     aquire_func = release_func = renew_func = lambda: True
 
 
+async def periodic_redis_cleanup():
+    """takin code: Clean up idle Redis connections
+    - Runs cleanup every hour
+    - Only cleans up normal connections (preserves subscription connections)
+    - Cleans up connections that have been idle for more than 1 hour
+    """
+    while True:
+        redis = None
+        try:
+            if WEBSOCKET_MANAGER == "redis":
+                log.info("Starting Redis idle connection cleanup...")
+                
+                # Record initial connection count
+                redis = await aioredis.from_url(WEBSOCKET_REDIS_URL)
+                initial_clients = await redis.client_list()
+                initial_count = len(initial_clients)
+                log.info(f"Total current connections: {initial_count}")
+                
+                killed = 0
+                for client in initial_clients:
+                    # Skip special connections
+                    flags = client.get('flags', '')
+                    if any(flag in flags for flag in ['S', 'M', 'x']):  # S=subscription, M=master, x=multiplex
+                        continue
+                            
+                    # Check idle time
+                    idle_seconds = int(client.get('idle', 0))
+                    if idle_seconds >= 3600:  # 1 hour
+                        addr = client.get('addr')
+                        name = client.get('name', 'unnamed')
+                        try:
+                            await redis.client_kill(addr)
+                            killed += 1
+                            log.debug(f"Cleaned up connection: {name} ({addr}), idle time: {idle_seconds}s")
+                        except Exception as e:
+                            log.warning(f"Failed to clean up connection {addr}: {str(e)}")
+                
+                # Check status after cleanup
+                final_clients = await redis.client_list()
+                final_count = len(final_clients)
+                log.info(
+                    f"Redis idle connection cleanup completed:\n"
+                    f"- Initial connections: {initial_count}\n"
+                    f"- Connections cleaned: {killed}\n"
+                    f"- Current connections: {final_count}"
+                )
+                
+        except Exception as e:
+            log.error(f"Redis cleanup task failed: {str(e)}")
+        finally:
+            if redis:
+                try:
+                    await redis.close()
+                except Exception as e:
+                    log.error(f"Failed to close Redis connection: {str(e)}")
+        
+        # Run every hour
+        await asyncio.sleep(3600)
+
+
 async def periodic_usage_pool_cleanup():
     if not aquire_func():
         log.debug("Usage pool cleanup lock already exists. Not running it.")
@@ -155,6 +215,8 @@ app = socketio.ASGIApp(
     sio,
     socketio_path="/ws/socket.io",
 )
+
+__all__ = ['app', 'periodic_usage_pool_cleanup', 'periodic_redis_cleanup']
 
 
 def get_models_in_use():
