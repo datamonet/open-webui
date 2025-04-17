@@ -58,7 +58,7 @@ if WEBSOCKET_MANAGER == "redis":
                     "health_check_interval": 60, # 60s
                     "retry_on_timeout": True,
                     # Use a connection pool with a reasonable max_connections limit
-                    "max_connections": 200  # Adjust based on your needs
+                    "max_connections": 500  # Adjust based on your needs
                 }
             )
     sio = socketio.AsyncServer(
@@ -127,7 +127,7 @@ async def periodic_redis_cleanup():
     - Only cleans up normal connections (preserves subscription connections)
     - Cleans up connections that have been idle for more than 1 hour
     """
-    CLEANUP_INTERVAL = 15 * 60  # 15 minutes
+    CLEANUP_INTERVAL = 10 * 60  # 10 minutes
     IDLE_TIMEOUT = 20 * 60  # 20 minutes
     while True:
         redis = None
