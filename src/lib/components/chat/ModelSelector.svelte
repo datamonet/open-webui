@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { models, showSettings, settings, user, mobile, config } from '$lib/stores';
+	import { PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS } from '$env/static/public';
 	import { onMount, tick, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import Selector from './ModelSelector/Selector.svelte';
@@ -37,14 +38,17 @@
 		<div class="flex w-full max-w-fit">
 			<div class="overflow-hidden w-full">
 				<div class="mr-1 max-w-full">
+					<!-- takin code：Special assistant model cannot be compared with other models -->
 					<Selector
 						id={`${selectedModelIdx}`}
 						placeholder={$i18n.t('Select a model')}
-						items={$models.map((model) => ({
-							value: model.id,
-							label: model.name,
-							model: model
-						}))}
+						items={$models
+							.filter(model => selectedModelIdx === 0 || !PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS.split(',').includes(model.id))
+							.map((model) => ({
+								value: model.id,
+								label: model.name,
+								model: model
+							}))}
 						showTemporaryChatControl={$user?.role === 'user'
 							? ($user?.permissions?.chat?.temporary ?? true) &&
 								!($user?.permissions?.chat?.temporary_enforced ?? false)
@@ -58,10 +62,11 @@
 				<div
 					class="  self-center mx-1 disabled:text-gray-600 disabled:hover:text-gray-600 -translate-y-[0.5px]"
 				>
-					<Tooltip content={$i18n.t('Add Model')}>
+				<!-- takin code：Special assistant model cannot be compared with other models -->
+					<Tooltip content={selectedModel && PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS.split(',').includes(selectedModel) ? $i18n.t('Assistant model cannot be compared with other models') : $i18n.t('Add Model')}>
 						<button
-							class=" "
-							{disabled}
+							class=" disabled:cursor-not-allowed disabled:text-gray-400"
+							disabled={disabled || (!!selectedModel && PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS.split(',').includes(selectedModel))}
 							on:click={() => {
 								selectedModels = [...selectedModels, ''];
 							}}

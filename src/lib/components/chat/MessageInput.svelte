@@ -70,6 +70,19 @@
 	let selectedModelIds = [];
 	$: selectedModelIds = atSelectedModel !== undefined ? [atSelectedModel.id] : selectedModels;
 
+	// takin code: 监听模型变化,当切换到普通chat模型时清空文件
+	$: {
+		const specialModelIds = PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS.split(',');
+		const isSpecialModel = selectedModelIds?.some(modelId => specialModelIds.includes(modelId));
+
+		// 如果切换到非特殊模型,且存在已上传的文件,清除这些文件
+		if (!isSpecialModel && files.length > 0) {
+			files = [];
+			// 提示停留5s
+			toast.info($i18n.t('Current model does not support files'), { duration: 5000 });
+		}
+	}
+
 	export let history;
 
 	export let prompt = '';
