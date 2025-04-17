@@ -190,14 +190,23 @@ async def generate_title(
 
     messages = form_data["messages"]
 
-    # Remove reasoning details from the messages
+    # takin code: Remove reasoning details from the messages and limit content length
+    MAX_CHARS_PER_MESSAGE = 1000  # Limit each message to 1000 characters
+    MAX_MESSAGES = 10  # Only use last 10 messages for title generation
+    
+    # Take only the last N messages
+    messages = messages[-MAX_MESSAGES:]
+    
     for message in messages:
+        # Remove reasoning details
         message["content"] = re.sub(
             r"<details\s+type=\"reasoning\"[^>]*>.*?<\/details>",
             "",
             message["content"],
             flags=re.S,
         ).strip()
+        # Truncate long messages
+        message["content"] = message["content"][:MAX_CHARS_PER_MESSAGE]
 
     content = title_generation_template(
         template,
