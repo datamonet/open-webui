@@ -58,7 +58,7 @@ if WEBSOCKET_MANAGER == "redis":
                     "health_check_interval": 60, # 60s
                     "retry_on_timeout": True,
                     # Use a connection pool with a reasonable max_connections limit
-                    "max_connections": 500  # Adjust based on your needs
+                    "max_connections": 10000  # Adjust based on your needs
                 }
             )
     sio = socketio.AsyncServer(
