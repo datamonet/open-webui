@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { models, showSettings, settings, user, mobile, config } from '$lib/stores';
+	import { PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS } from '$env/static/public';
 	import { onMount, tick, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import Selector from './ModelSelector/Selector.svelte';
@@ -37,14 +38,17 @@
 		<div class="flex w-full max-w-fit">
 			<div class="overflow-hidden w-full">
 				<div class="mr-1 max-w-full">
+					<!-- takin code：Special assistant model cannot be compared with other models -->
 					<Selector
 						id={`${selectedModelIdx}`}
 						placeholder={$i18n.t('Select a model')}
-						items={$models.map((model) => ({
-							value: model.id,
-							label: model.name,
-							model: model
-						}))}
+						items={$models
+							.filter(model => selectedModelIdx === 0 || !PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS.split(',').includes(model.id))
+							.map((model) => ({
+								value: model.id,
+								label: model.name,
+								model: model
+							}))}
 						showTemporaryChatControl={$user?.role === 'user'
 							? ($user?.permissions?.chat?.temporary ?? true) &&
 								!($user?.permissions?.chat?.temporary_enforced ?? false)
@@ -54,60 +58,59 @@
 				</div>
 			</div>
 
-			{#if $user?.role === 'admin' || ($user?.permissions?.chat?.multiple_models ?? true)}
-				{#if selectedModelIdx === 0}
-					<div
-						class="  self-center mx-1 disabled:text-gray-600 disabled:hover:text-gray-600 -translate-y-[0.5px]"
-					>
-						<Tooltip content={$i18n.t('Add Model')}>
-							<button
-								class=" "
-								{disabled}
-								on:click={() => {
-									selectedModels = [...selectedModels, ''];
-								}}
-								aria-label="Add Model"
+			{#if selectedModelIdx === 0}
+				<div
+					class="  self-center mx-1 disabled:text-gray-600 disabled:hover:text-gray-600 -translate-y-[0.5px]"
+				>
+				<!-- takin code：Special assistant model cannot be compared with other models -->
+					<Tooltip content={selectedModel && PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS.split(',').includes(selectedModel) ? $i18n.t('Assistant model cannot be compared with other models') : $i18n.t('Add Model')}>
+						<button
+							class=" disabled:cursor-not-allowed disabled:text-gray-400"
+							disabled={disabled || (!!selectedModel && PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS.split(',').includes(selectedModel))}
+							on:click={() => {
+								selectedModels = [...selectedModels, ''];
+							}}
+							aria-label="Add Model"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke-width="2"
+								stroke="currentColor"
+								class="size-3.5"
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke-width="2"
-									stroke="currentColor"
-									class="size-3.5"
-								>
-									<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
-								</svg>
-							</button>
-						</Tooltip>
-					</div>
-				{:else}
-					<div
-						class="  self-center mx-1 disabled:text-gray-600 disabled:hover:text-gray-600 -translate-y-[0.5px]"
-					>
-						<Tooltip content={$i18n.t('Remove Model')}>
-							<button
-								{disabled}
-								on:click={() => {
-									selectedModels.splice(selectedModelIdx, 1);
-									selectedModels = selectedModels;
-								}}
-								aria-label="Remove Model"
+								<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+							</svg>
+						</button>
+					</Tooltip>
+				</div>
+			{:else}
+				<div
+					class="  self-center mx-1 disabled:text-gray-600 disabled:hover:text-gray-600 -translate-y-[0.5px]"
+				>
+					<Tooltip content={$i18n.t('Remove Model')}>
+						<button
+							{disabled}
+							on:click={() => {
+								selectedModels.splice(selectedModelIdx, 1);
+								selectedModels = selectedModels;
+							}}
+							aria-label="Remove Model"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke-width="2"
+								stroke="currentColor"
+								class="size-3"
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke-width="2"
-									stroke="currentColor"
-									class="size-3"
-								>
-									<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" />
-								</svg>
-							</button>
-						</Tooltip>
-					</div>
-				{/if}
+								<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" />
+							</svg>
+						</button>
+					</Tooltip>
+				</div>
 			{/if}
 		</div>
 	{/each}

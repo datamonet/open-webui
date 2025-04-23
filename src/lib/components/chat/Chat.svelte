@@ -74,8 +74,7 @@
 		generateQueries,
 		chatAction,
 		generateMoACompletion,
-		stopTask,
-		getTaskIdsByChatId
+		stopTask
 	} from '$lib/apis';
 	import { getTools } from '$lib/apis/tools';
 
@@ -131,7 +130,7 @@
 		currentId: null
 	};
 
-	let taskIds = null;
+	let taskId = null;
 
 	// Chat Input
 	let prompt = '';
@@ -262,21 +261,6 @@
 					} else {
 						message.statusHistory = [data];
 					}
-				} else if (type === 'chat:completion') {
-					chatCompletionEventHandler(data, message, event.chat_id);
-				} else if (type === 'chat:message:delta' || type === 'message') {
-					message.content += data.content;
-				} else if (type === 'chat:message' || type === 'replace') {
-					message.content = data.content;
-				} else if (type === 'chat:message:files' || type === 'files') {
-					message.files = data.files;
-				} else if (type === 'chat:title') {
-					chatTitle.set(data);
-					currentChatPage.set(1);
-					await chats.set(await getChatList(localStorage.token, $currentChatPage));
-				} else if (type === 'chat:tags') {
-					chat = await getChatById(localStorage.token, $chatId);
-					allTags.set(await getAllTags(localStorage.token));
 				} else if (type === 'source' || type === 'citation') {
 					if (data?.type === 'code_execution') {
 						// Code execution; update existing code execution by ID, or add new one.
@@ -303,19 +287,19 @@
 							message.sources = [data];
 						}
 					}
-				} else if (type === 'notification') {
-					const toastType = data?.type ?? 'info';
-					const toastContent = data?.content ?? '';
-
-					if (toastType === 'success') {
-						toast.success(toastContent);
-					} else if (toastType === 'error') {
-						toast.error(toastContent);
-					} else if (toastType === 'warning') {
-						toast.warning(toastContent);
-					} else {
-						toast.info(toastContent);
-					}
+				} else if (type === 'chat:completion') {
+					chatCompletionEventHandler(data, message, event.chat_id);
+				} else if (type === 'chat:title') {
+					chatTitle.set(data);
+					currentChatPage.set(1);
+					await chats.set(await getChatList(localStorage.token, $currentChatPage));
+				} else if (type === 'chat:tags') {
+					chat = await getChatById(localStorage.token, $chatId);
+					allTags.set(await getAllTags(localStorage.token));
+				} else if (type === 'chat:message:delta' || type === 'message') {
+					message.content += data.content;
+				} else if (type === 'chat:message' || type === 'replace') {
+					message.content = data.content;
 				} else if (type === 'confirmation') {
 					eventCallback = cb;
 
@@ -348,6 +332,19 @@
 					eventConfirmationMessage = data.message;
 					eventConfirmationInputPlaceholder = data.placeholder;
 					eventConfirmationInputValue = data?.value ?? '';
+				} else if (type === 'notification') {
+					const toastType = data?.type ?? 'info';
+					const toastContent = data?.content ?? '';
+
+					if (toastType === 'success') {
+						toast.success(toastContent);
+					} else if (toastType === 'error') {
+						toast.error(toastContent);
+					} else if (toastType === 'warning') {
+						toast.warning(toastContent);
+					} else {
+						toast.info(toastContent);
+					}
 				} else {
 					console.log('Unknown message type', data);
 				}
@@ -404,7 +401,6 @@
 		if (!$chatId) {
 			chatIdUnsubscriber = chatId.subscribe(async (value) => {
 				if (!value) {
-					await tick(); // Wait for DOM updates
 					await initNewChat();
 				}
 			});
@@ -821,21 +817,8 @@
 				await tick();
 
 				if (history.currentId) {
-					for (const message of Object.values(history.messages)) {
-						if (message.role === 'assistant') {
-							message.done = true;
-						}
-					}
+					history.messages[history.currentId].done = true;
 				}
-
-				const taskRes = await getTaskIdsByChatId(localStorage.token, $chatId).catch((error) => {
-					return null;
-				});
-
-				if (taskRes) {
-					taskIds = taskRes.task_ids;
-				}
-
 				await tick();
 
 				return true;
@@ -907,7 +890,7 @@
 			}
 		}
 
-		taskIds = null;
+		taskId = null;
 	};
 
 	const chatActionHandler = async (chatId, actionId, modelId, responseMessageId, event = null) => {
@@ -1665,11 +1648,7 @@
 			if (res.error) {
 				await handleOpenAIError(res.error, responseMessage);
 			} else {
-				if (taskIds) {
-					taskIds.push(res.task_id);
-				} else {
-					taskIds = [res.task_id];
-				}
+				taskId = res.task_id;
 			}
 		}
 
@@ -1720,26 +1699,23 @@
 	};
 
 	const stopResponse = async () => {
-		if (taskIds) {
-			for (const taskId of taskIds) {
-				const res = await stopTask(localStorage.token, taskId).catch((error) => {
-					toast.error(`${error}`);
-					return null;
-				});
-			}
+		if (taskId) {
+			const res = await stopTask(localStorage.token, taskId).catch((error) => {
+				toast.error(`${error}`);
+				return null;
+			});
 
-			taskIds = null;
+			if (res) {
+				taskId = null;
 
-			const responseMessage = history.messages[history.currentId];
-			// Set all response messages to done
-			for (const messageId of history.messages[responseMessage.parentId].childrenIds) {
-				history.messages[messageId].done = true;
-			}
+				const responseMessage = history.messages[history.currentId];
+				responseMessage.done = true;
 
-			history.messages[history.currentId] = responseMessage;
+				history.messages[history.currentId] = responseMessage;
 
-			if (autoScroll) {
-				scrollToBottom();
+				if (autoScroll) {
+					scrollToBottom();
+				}
 			}
 		}
 	};
@@ -1951,7 +1927,7 @@
 		: ' '} w-full max-w-full flex flex-col"
 	id="chat-container"
 >
-	{#if !loading}
+	{#if chatIdProp === '' || (!loading && chatIdProp)}
 		{#if $settings?.backgroundImageUrl ?? null}
 			<div
 				class="absolute {$showSidebar
@@ -1965,27 +1941,75 @@
 			/>
 		{/if}
 
+		<Navbar
+			bind:this={navbarElement}
+			chat={{
+				id: $chatId,
+				chat: {
+					title: $chatTitle,
+					models: selectedModels,
+					system: $settings.system ?? undefined,
+					params: params,
+					history: history,
+					timestamp: Date.now()
+				}
+			}}
+			title={$chatTitle}
+			bind:selectedModels
+			shareEnabled={!!history.currentId}
+			{initNewChat}
+		/>
+
 		<PaneGroup direction="horizontal" class="w-full h-full">
-			<Pane defaultSize={50} class="h-full flex relative max-w-full flex-col">
-				<Navbar
-					bind:this={navbarElement}
-					chat={{
-						id: $chatId,
-						chat: {
-							title: $chatTitle,
-							models: selectedModels,
-							system: $settings.system ?? undefined,
-							params: params,
-							history: history,
-							timestamp: Date.now()
-						}
-					}}
-					{history}
-					title={$chatTitle}
-					bind:selectedModels
-					shareEnabled={!!history.currentId}
-					{initNewChat}
-				/>
+			<Pane defaultSize={50} class="h-full flex w-full relative">
+				{#if !history.currentId && !$chatId && selectedModels.length <= 1 && ($banners.length > 0 || ($config?.license_metadata?.type ?? null) === 'trial' || (($config?.license_metadata?.seats ?? null) !== null && $config?.user_count > $config?.license_metadata?.seats))}
+					<div class="absolute top-12 left-0 right-0 w-full z-30">
+						<div class=" flex flex-col gap-1 w-full">
+							{#if ($config?.license_metadata?.type ?? null) === 'trial'}
+								<Banner
+									banner={{
+										type: 'info',
+										title: 'Trial License',
+										content: $i18n.t(
+											'You are currently using a trial license. Please contact support to upgrade your license.'
+										)
+									}}
+								/>
+							{/if}
+
+							{#if ($config?.license_metadata?.seats ?? null) !== null && $config?.user_count > $config?.license_metadata?.seats}
+								<Banner
+									banner={{
+										type: 'error',
+										title: 'License Error',
+										content: $i18n.t(
+											'Exceeded the number of seats in your license. Please contact support to increase the number of seats.'
+										)
+									}}
+								/>
+							{/if}
+
+							{#each $banners.filter( (b) => (b.dismissible ? !JSON.parse(localStorage.getItem('dismissedBannerIds') ?? '[]').includes(b.id) : true) ) as banner}
+								<Banner
+									{banner}
+									on:dismiss={(e) => {
+										const bannerId = e.detail;
+
+										localStorage.setItem(
+											'dismissedBannerIds',
+											JSON.stringify(
+												[
+													bannerId,
+													...JSON.parse(localStorage.getItem('dismissedBannerIds') ?? '[]')
+												].filter((id) => $banners.find((b) => b.id === id))
+											)
+										);
+									}}
+								/>
+							{/each}
+						</div>
+					</div>
+				{/if}
 
 				<div class="flex flex-col flex-auto z-10 w-full @container">
 					{#if $settings?.landingPageMode === 'chat' || createMessagesList(history, history.currentId).length > 0}
@@ -2023,7 +2047,6 @@
 						<div class=" pb-[1rem]">
 							<MessageInput
 								{history}
-								{taskIds}
 								{selectedModels}
 								bind:files
 								bind:prompt

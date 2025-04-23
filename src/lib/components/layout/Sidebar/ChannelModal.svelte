@@ -19,7 +19,7 @@
 	export let edit = false;
 
 	let name = '';
-	let accessControl = {};
+	let accessControl = null;
 
 	let loading = false;
 

@@ -4,39 +4,19 @@ import re
 import inspect
 import aiohttp
 import asyncio
-import yaml
 
-from pydantic import BaseModel
-from pydantic.fields import FieldInfo
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    get_type_hints,
-    get_args,
-    get_origin,
-    Dict,
-    List,
-    Tuple,
-    Union,
-    Optional,
-    Type,
-)
+from typing import Any, Awaitable, Callable, get_type_hints, Dict, List, Union, Optional
 from functools import update_wrapper, partial
 
 
 from fastapi import Request
 from pydantic import BaseModel, Field, create_model
-
-from langchain_core.utils.function_calling import (
-    convert_to_openai_function as convert_pydantic_model_to_openai_function_spec,
-)
+from langchain_core.utils.function_calling import convert_to_openai_function
 
 
 from open_webui.models.tools import Tools
 from open_webui.models.users import UserModel
-from open_webui.utils.plugin import load_tool_module_by_id
-from open_webui.env import AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA
+from open_webui.utils.plugin import load_tools_module_by_id
 
 import copy
 
@@ -75,12 +55,7 @@ def get_tools(
                 tool_server_connection = (
                     request.app.state.config.TOOL_SERVER_CONNECTIONS[server_idx]
                 )
-                tool_server_data = None
-                for server in request.app.state.TOOL_SERVERS:
-                    if server["idx"] == server_idx:
-                        tool_server_data = server
-                        break
-                assert tool_server_data is not None
+                tool_server_data = request.app.state.TOOL_SERVERS[server_idx]
                 specs = tool_server_data.get("specs", [])
 
                 for spec in specs:
@@ -137,7 +112,7 @@ def get_tools(
         else:
             module = request.app.state.TOOLS.get(tool_id, None)
             if module is None:
-                module, _ = load_tool_module_by_id(tool_id)
+                module, _ = load_tools_module_by_id(tool_id)
                 request.app.state.TOOLS[tool_id] = module
 
             extra_params["__id__"] = tool_id
@@ -258,7 +233,7 @@ def parse_docstring(docstring):
     return param_descriptions
 
 
-def convert_function_to_pydantic_model(func: Callable) -> type[BaseModel]:
+def function_to_pydantic_model(func: Callable) -> type[BaseModel]:
     """
     Converts a Python function's type hints and docstring to a Pydantic model,
     including support for nested types, default values, and descriptions.
@@ -275,56 +250,44 @@ def convert_function_to_pydantic_model(func: Callable) -> type[BaseModel]:
     parameters = signature.parameters
 
     docstring = func.__doc__
+    descriptions = parse_docstring(docstring)
 
-    description = parse_description(docstring)
-    function_descriptions = parse_docstring(docstring)
+    tool_description = parse_description(docstring)
 
     field_defs = {}
     for name, param in parameters.items():
-
         type_hint = type_hints.get(name, Any)
         default_value = param.default if param.default is not param.empty else ...
-
-        description = function_descriptions.get(name, None)
-
-        if description:
-            field_defs[name] = type_hint, Field(default_value, description=description)
-        else:
+        description = descriptions.get(name, None)
+        if not description:
             field_defs[name] = type_hint, default_value
+            continue
+        field_defs[name] = type_hint, Field(default_value, description=description)
 
     model = create_model(func.__name__, **field_defs)
-    model.__doc__ = description
+    model.__doc__ = tool_description
 
     return model
 
 
-def get_functions_from_tool(tool: object) -> list[Callable]:
+def get_callable_attributes(tool: object) -> list[Callable]:
     return [
         getattr(tool, func)
         for func in dir(tool)
-        if callable(
-            getattr(tool, func)
-        )  # checks if the attribute is callable (a method or function).
-        and not func.startswith(
-            "__"
-        )  # filters out special (dunder) methods like init, str, etc. — these are usually built-in functions of an object that you might not need to use directly.
-        and not inspect.isclass(
-            getattr(tool, func)
-        )  # ensures that the callable is not a class itself, just a method or function.
+        if callable(getattr(tool, func))
+        and not func.startswith("__")
+        and not inspect.isclass(getattr(tool, func))
     ]
 
 
-def get_tool_specs(tool_module: object) -> list[dict]:
-    function_models = map(
-        convert_function_to_pydantic_model, get_functions_from_tool(tool_module)
+def get_tools_specs(tool_class: object) -> list[dict]:
+    function_model_list = map(
+        function_to_pydantic_model, get_callable_attributes(tool_class)
     )
-
-    specs = [
-        convert_pydantic_model_to_openai_function_spec(function_model)
-        for function_model in function_models
+    return [
+        convert_to_openai_function(function_model)
+        for function_model in function_model_list
     ]
-
-    return specs
 
 
 def resolve_schema(schema, components):
@@ -430,21 +393,14 @@ async def get_tool_server_data(token: str, url: str) -> Dict[str, Any]:
 
     error = None
     try:
-        timeout = aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as response:
                 if response.status != 200:
                     error_body = await response.json()
                     raise Exception(error_body)
-
-                # Check if URL ends with .yaml or .yml to determine format
-                if url.lower().endswith((".yaml", ".yml")):
-                    text_content = await response.text()
-                    res = yaml.safe_load(text_content)
-                else:
-                    res = await response.json()
+                res = await response.json()
     except Exception as err:
-        log.exception(f"Could not fetch tool server spec from {url}")
+        print("Error:", err)
         if isinstance(err, dict) and "detail" in err:
             error = err["detail"]
         else:

@@ -35,7 +35,7 @@
 	let auth_type = 'bearer';
 	let key = '';
 
-	let accessControl = {};
+	let accessControl = null;
 
 	let enable = true;
 

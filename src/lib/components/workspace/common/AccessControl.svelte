@@ -13,7 +13,7 @@
 	export let onChange: Function = () => {};
 
 	export let accessRoles = ['read'];
-	export let accessControl = {};
+	export let accessControl = null;
 
 	export let allowPublic = true;
 

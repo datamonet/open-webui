@@ -1,7 +1,6 @@
 import logging
 import os
 import uuid
-from fnmatch import fnmatch
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
@@ -84,7 +83,7 @@ def upload_file(
     file: UploadFile = File(...),
     user=Depends(get_verified_user),
     file_metadata: dict = {},
-    process: bool = Query(True),
+    process: bool = Query(False), # takin code:file process default false
 ):
     log.info(f"file.content_type: {file.content_type}")
     try:
@@ -95,7 +94,8 @@ def upload_file(
         id = str(uuid.uuid4())
         name = filename
         filename = f"{id}_{filename}"
-        contents, file_path = Storage.upload_file(file.file, filename)
+        # takin code:takin code, add open-webui storage prefix
+        contents, file_path = Storage.upload_file(file.file, filename, user.id)
 
         file_item = Files.insert_new_file(
             user.id,
@@ -176,47 +176,6 @@ async def list_files(user=Depends(get_verified_user), content: bool = Query(True
             del file.data["content"]
 
     return files
-
-
-############################
-# Search Files
-############################
-
-
-@router.get("/search", response_model=list[FileModelResponse])
-async def search_files(
-    filename: str = Query(
-        ...,
-        description="Filename pattern to search for. Supports wildcards such as '*.txt'",
-    ),
-    content: bool = Query(True),
-    user=Depends(get_verified_user),
-):
-    """
-    Search for files by filename with support for wildcard patterns.
-    """
-    # Get files according to user role
-    if user.role == "admin":
-        files = Files.get_files()
-    else:
-        files = Files.get_files_by_user_id(user.id)
-
-    # Get matching files
-    matching_files = [
-        file for file in files if fnmatch(file.filename.lower(), filename.lower())
-    ]
-
-    if not matching_files:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No files found matching the pattern.",
-        )
-
-    if not content:
-        for file in matching_files:
-            del file.data["content"]
-
-    return matching_files
 
 
 ############################

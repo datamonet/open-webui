@@ -23,6 +23,9 @@ ARG GID=0
 ######## WebUI frontend ########
 FROM --platform=$BUILDPLATFORM node:22-alpine3.20 AS build
 ARG BUILD_HASH
+# takin code:前端需要传入
+ARG PUBLIC_TAKIN_API_URL 
+ARG PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS 
 
 WORKDIR /app
 
@@ -31,6 +34,10 @@ RUN npm ci
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
+# takin code:前端需要传入
+ENV PUBLIC_TAKIN_API_URL=${PUBLIC_TAKIN_API_URL}
+ENV PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS=${PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS}
+ENV NODE_OPTIONS="--max-old-space-size=10240"
 RUN npm run build
 
 ######## WebUI backend ########

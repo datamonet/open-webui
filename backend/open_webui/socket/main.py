@@ -9,8 +9,9 @@ from open_webui.models.users import Users, UserNameResponse
 from open_webui.models.channels import Channels
 from open_webui.models.chats import Chats
 from open_webui.utils.redis import (
+    parse_redis_sentinel_url,
     get_sentinels_from_env,
-    get_sentinel_url_from_env,
+    AsyncRedisSentinelManager,
 )
 
 from open_webui.env import (
@@ -37,13 +38,29 @@ log.setLevel(SRC_LOG_LEVELS["SOCKET"])
 
 if WEBSOCKET_MANAGER == "redis":
     if WEBSOCKET_SENTINEL_HOSTS:
-        mgr = socketio.AsyncRedisManager(
-            get_sentinel_url_from_env(
-                WEBSOCKET_REDIS_URL, WEBSOCKET_SENTINEL_HOSTS, WEBSOCKET_SENTINEL_PORT
-            )
+        redis_config = parse_redis_sentinel_url(WEBSOCKET_REDIS_URL)
+        mgr = AsyncRedisSentinelManager(
+            WEBSOCKET_SENTINEL_HOSTS.split(","),
+            sentinel_port=int(WEBSOCKET_SENTINEL_PORT),
+            redis_port=redis_config["port"],
+            service=redis_config["service"],
+            db=redis_config["db"],
+            username=redis_config["username"],
+            password=redis_config["password"],
         )
     else:
-        mgr = socketio.AsyncRedisManager(WEBSOCKET_REDIS_URL)
+        mgr = socketio.AsyncRedisManager(
+                WEBSOCKET_REDIS_URL,
+                # Add connection pool configuration
+                redis_options={
+                    "socket_timeout": 60, # 60s
+                    "socket_connect_timeout": 30, # 30s
+                    "health_check_interval": 60, # 60s
+                    "retry_on_timeout": True,
+                    # Use a connection pool with a reasonable max_connections limit
+                    "max_connections": 10000  # Adjust based on your needs
+                }
+            )
     sio = socketio.AsyncServer(
         cors_allowed_origins=[],
         async_mode="asgi",
@@ -104,6 +121,68 @@ else:
     aquire_func = release_func = renew_func = lambda: True
 
 
+async def periodic_redis_cleanup():
+    """takin code: Clean up idle Redis connections
+    - Runs cleanup every hour
+    - Only cleans up normal connections (preserves subscription connections)
+    - Cleans up connections that have been idle for more than 1 hour
+    """
+    CLEANUP_INTERVAL = 10 * 60  # 10 minutes
+    IDLE_TIMEOUT = 20 * 60  # 20 minutes
+    while True:
+        redis = None
+        try:
+            if WEBSOCKET_MANAGER == "redis":
+                log.info("Starting Redis idle connection cleanup...")
+                
+                # Record initial connection count
+                redis = await aioredis.from_url(WEBSOCKET_REDIS_URL)
+                initial_clients = await redis.client_list()
+                initial_count = len(initial_clients)
+                log.info(f"Total current connections: {initial_count}")
+                
+                killed = 0
+                for client in initial_clients:
+                    # Skip special connections
+                    flags = client.get('flags', '')
+                    if any(flag in flags for flag in ['S', 'M', 'x']):  # S=subscription, M=master, x=multiplex
+                        continue
+                            
+                    # Check idle time
+                    idle_seconds = int(client.get('idle', 0))
+                    if idle_seconds >= IDLE_TIMEOUT: 
+                        addr = client.get('addr')
+                        name = client.get('name', 'unnamed')
+                        try:
+                            await redis.client_kill(addr)
+                            killed += 1
+                            log.debug(f"Cleaned up connection: {name} ({addr}), idle time: {idle_seconds}s")
+                        except Exception as e:
+                            log.warning(f"Failed to clean up connection {addr}: {str(e)}")
+                
+                # Check status after cleanup
+                final_clients = await redis.client_list()
+                final_count = len(final_clients)
+                log.info(
+                    f"Redis idle connection cleanup completed:\n"
+                    f"- Initial connections: {initial_count}\n"
+                    f"- Connections cleaned: {killed}\n"
+                    f"- Current connections: {final_count}"
+                )
+                
+        except Exception as e:
+            log.error(f"Redis cleanup task failed: {str(e)}")
+        finally:
+            if redis:
+                try:
+                    await redis.close()
+                except Exception as e:
+                    log.error(f"Failed to close Redis connection: {str(e)}")
+        
+        # Run every CLEANUP_INTERVAL
+        await asyncio.sleep(CLEANUP_INTERVAL)
+
+
 async def periodic_usage_pool_cleanup():
     if not aquire_func():
         log.debug("Usage pool cleanup lock already exists. Not running it.")
@@ -149,6 +228,8 @@ app = socketio.ASGIApp(
     sio,
     socketio_path="/ws/socket.io",
 )
+
+__all__ = ['app', 'periodic_usage_pool_cleanup', 'periodic_redis_cleanup']
 
 
 def get_models_in_use():
@@ -299,10 +380,74 @@ async def disconnect(sid):
         # print(f"Unknown session ID {sid} disconnected")
 
 
+async def update_database(event_data, request_info):
+    """takin code: 异步处理数据库更新操作，与消息发送解耦。
+
+    Args:
+        event_data (dict): 事件数据，包含消息类型和内容
+        request_info (dict): 请求信息，包含chat_id和message_id
+    """
+    try:
+        # 验证事件类型是否存在
+        if "type" not in event_data:
+            return
+
+        # 验证必要的请求参数
+        if not all(k in request_info for k in ["chat_id", "message_id"]):
+            log.error(f"Missing required fields in request_info: {request_info}")
+            return
+
+        # 处理状态更新事件
+        if event_data["type"] == "status":
+            # 异步更新消息状态
+            await Chats.add_message_status_to_chat_by_id_and_message_id(
+                request_info["chat_id"],
+                request_info["message_id"],
+                event_data.get("data", {}),  # 使用空字典作为默认值
+            )
+        # 处理消息内容更新事件
+        elif event_data["type"] == "message":
+            try:
+                # 获取现有消息内容
+                message = await Chats.get_message_by_id_and_message_id(
+                    request_info["chat_id"],
+                    request_info["message_id"],
+                )
+                # 如果消息存在则获取内容，否则使用空字符串
+                content = message.get("content", "") if message else ""
+                # 追加新的消息内容
+                content += event_data.get("data", {}).get("content", "")
+                # 异步更新消息内容
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    request_info["chat_id"],
+                    request_info["message_id"],
+                    {"content": content},
+                )
+            except Exception as e:
+                log.error(f"Error processing message update: {e}")
+                # 如果获取消息失败，仍然尝试保存新内容
+                content = event_data.get("data", {}).get("content", "")
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    request_info["chat_id"],
+                    request_info["message_id"],
+                    {"content": content},
+                )
+        elif event_data["type"] == "replace":
+            content = event_data.get("data", {}).get("content", "")
+            await Chats.upsert_message_to_chat_by_id_and_message_id(
+                request_info["chat_id"],
+                request_info["message_id"],
+                {"content": content},
+            )
+    except Exception as e:
+        log.error(f"Database update failed: {e}")
+        # 这里可以选择重试或者通知前端
+
 def get_event_emitter(request_info, update_db=True):
     async def __event_emitter__(event_data):
         user_id = request_info["user_id"]
-
+        
+        # 1. 获取所有需要发送消息的session
         session_ids = list(
             set(
                 USER_POOL.get(user_id, [])
@@ -314,8 +459,10 @@ def get_event_emitter(request_info, update_db=True):
             )
         )
 
+        # 2. 创建所有消息发送任务
+        emit_tasks = []
         for session_id in session_ids:
-            await sio.emit(
+            task = sio.emit(
                 "chat-events",
                 {
                     "chat_id": request_info.get("chat_id", None),
@@ -324,43 +471,15 @@ def get_event_emitter(request_info, update_db=True):
                 },
                 to=session_id,
             )
-
+            emit_tasks.append(task)
+        
+        # 3. takin code: 并行处理所有消息发送
+        if emit_tasks:
+            await asyncio.gather(*emit_tasks)
+        
+        # 4. takin code: 异步处理数据库写入
         if update_db:
-            if "type" in event_data and event_data["type"] == "status":
-                Chats.add_message_status_to_chat_by_id_and_message_id(
-                    request_info["chat_id"],
-                    request_info["message_id"],
-                    event_data.get("data", {}),
-                )
-
-            if "type" in event_data and event_data["type"] == "message":
-                message = Chats.get_message_by_id_and_message_id(
-                    request_info["chat_id"],
-                    request_info["message_id"],
-                )
-
-                if message:
-                    content = message.get("content", "")
-                    content += event_data.get("data", {}).get("content", "")
-
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
-                        request_info["chat_id"],
-                        request_info["message_id"],
-                        {
-                            "content": content,
-                        },
-                    )
-
-            if "type" in event_data and event_data["type"] == "replace":
-                content = event_data.get("data", {}).get("content", "")
-
-                Chats.upsert_message_to_chat_by_id_and_message_id(
-                    request_info["chat_id"],
-                    request_info["message_id"],
-                    {
-                        "content": content,
-                    },
-                )
+            asyncio.create_task(update_database(event_data, request_info))
 
     return __event_emitter__
 

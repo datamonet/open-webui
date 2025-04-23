@@ -907,6 +907,29 @@ class ChatTable:
                 return True
         except Exception:
             return False
+    # takin code: add get thread by id use assistant api model
+    def get_thread_by_id(self, id: str) -> Optional[str]:
+        chat = self.get_chat_by_id(id)
+        if chat is None:
+            return None
+
+        return chat.meta.get("thread", None)
+
+    def update_thread_by_id(self, id: str, thread: str) -> Optional[ChatModel]:
+        try:
+            with get_db() as db:
+                chat = db.get(Chat, id)
+                if chat is None:
+                    return None
+
+                current_meta = chat.meta or {}
+                current_meta["thread"] = thread
+                chat.meta = current_meta
+                db.commit()
+                db.refresh(chat)
+                return ChatModel.model_validate(chat)
+        except Exception:
+            return None
 
 
 Chats = ChatTable()

@@ -13,7 +13,7 @@ import pytz
 from pytz import UTC
 from typing import Optional, Union, List, Dict
 
-from open_webui.models.users import Users
+from open_webui.models.users import Users, UserModel
 
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import (
@@ -39,6 +39,12 @@ ALGORITHM = "HS256"
 ##############
 # Auth Utils
 ##############
+
+# This class is from takin.ai - handles user credits for API usage
+class UserWithCredits(UserModel):
+    extraCredits: float = 0
+    subscriptionCredits: float = 0
+    subscriptionPurchasedCredits: float = 0
 
 
 def verify_signature(payload: str, signature: str) -> bool:
@@ -113,8 +119,26 @@ def verify_password(plain_password, hashed_password):
 
 def get_password_hash(password):
     return pwd_context.hash(password)
+# takin code
+use_secure_cookies = os.getenv("ENV") == "prod"
+takin_cookie_name = '__Secure-authjs.session-token' if use_secure_cookies else "authjs.session-token"
+# takin code：从请求中获取token
+def get_token(request: Request) -> str:
+    cookie = request.cookies.get(takin_cookie_name)
+    return cookie
 
-
+# takin code：删除用户token
+def del_token(response: Response):
+    response.delete_cookie(
+        key=takin_cookie_name,
+        path='/',
+        domain='.takin.ai' if use_secure_cookies else None,
+        secure=use_secure_cookies,
+        httponly=True,
+        samesite='lax'
+    )
+    return response
+    
 def create_token(data: dict, expires_delta: Union[timedelta, None] = None) -> str:
     payload = data.copy()
 
@@ -158,19 +182,48 @@ def get_current_user(
     background_tasks: BackgroundTasks,
     auth_token: HTTPAuthorizationCredentials = Depends(bearer_security),
 ):
-    token = None
-
+    """takin code：用户认证装饰器
+    
+    处理两种认证方式：
+    1. Takin token: 包含完整的用户信息和积分信息
+    2. WebUI token: 仅包含用户ID
+    
+    Args:
+        request: FastAPI请求对象
+        background_tasks: 后台任务队列
+        auth_token: HTTP认证凭证
+        
+    Returns:
+        UserWithCredits: 包含用户信息和积分信息的用户对象
+        
+    Raises:
+        HTTPException: 当认证失败时
+    """
+    # 1. 获取tokens
+    webui_token = None
+    takin_token = get_token(request)  # 从cookie中获取takin token
+    
+    # 获取webui token的优先级：Authorization header > cookies
     if auth_token is not None:
-        token = auth_token.credentials
-
-    if token is None and "token" in request.cookies:
-        token = request.cookies.get("token")
-
-    if token is None:
-        raise HTTPException(status_code=403, detail="Not authenticated")
-
+        webui_token = auth_token.credentials
+        
+    if webui_token is None and "token" in request.cookies:
+        webui_token = request.cookies.get("token")
+    
+    # 2. 验证takin用户信息
+    takin_user = None
+    if takin_token:
+        response = requests.get(
+            f'{os.getenv("PUBLIC_TAKIN_API_URL", "http://127.0.0.1:3000")}/api/external/user',
+            headers={'Authorization': f'Bearer {takin_token}'}
+        )
+        if not response.ok:
+            return None
+        takin_user = response.json().get('data')
+    
+    # 3. 处理API key的特殊情况
     # auth by api key
-    if token.startswith("sk-"):
+    if webui_token is not None and webui_token.startswith("sk-"):
         if not request.state.enable_api_key:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.API_KEY_NOT_ALLOWED
@@ -194,35 +247,49 @@ def get_current_user(
                     status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.API_KEY_NOT_ALLOWED
                 )
 
-        return get_current_user_by_api_key(token)
-
-    # auth by jwt token
+        return get_current_user_by_api_key(webui_token)
+    
+    # 4. token解析和用户验证
     try:
-        data = decode_token(token)
+        user_data = None
+        if takin_token:  # 优先使用takin token
+            user_data = decode_token(takin_token)
+            user = Users.get_user_by_email(user_data["email"])
+        elif webui_token:  # 降级使用webui token
+            user_data = decode_token(webui_token)
+            user = Users.get_user_by_id(user_data["id"])
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="No valid token provided"
+            )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
+            detail="Invalid token format"
         )
-
-    if data is not None and "id" in data:
-        user = Users.get_user_by_id(data["id"])
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.INVALID_TOKEN,
-            )
-        else:
-            # Refresh the user's last active timestamp asynchronously
-            # to prevent blocking the request
-            if background_tasks:
-                background_tasks.add_task(Users.update_user_last_active_by_id, user.id)
-        return user
-    else:
+    
+    # 5. 验证用户是否存在
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.UNAUTHORIZED,
+            detail=ERROR_MESSAGES.INVALID_TOKEN
         )
+    
+    # 6. 异步更新用户活动时间
+    if background_tasks:
+        background_tasks.add_task(Users.update_user_last_active_by_id, user.id)
+    
+    # 7. 更新用户头像并返回带积分信息的用户对象
+    if takin_user:
+        user.profile_image_url = takin_user.get("image", user.profile_image_url)
+    
+    return UserWithCredits(
+        **user.model_dump(),
+        extraCredits=takin_user.get("extraCredits", 0) if takin_user else 0,
+        subscriptionCredits=takin_user.get("subscriptionCredits", 0) if takin_user else 0,
+        subscriptionPurchasedCredits=takin_user.get("subscriptionPurchasedCredits", 0) if takin_user else 0
+    )
 
 
 def get_current_user_by_api_key(api_key: str):

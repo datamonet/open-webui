@@ -153,9 +153,7 @@ async def update_memory_by_id(
     form_data: MemoryUpdateModel,
     user=Depends(get_verified_user),
 ):
-    memory = Memories.update_memory_by_id_and_user_id(
-        memory_id, user.id, form_data.content
-    )
+    memory = Memories.update_memory_by_id(memory_id, form_data.content)
     if memory is None:
         raise HTTPException(status_code=404, detail="Memory not found")
 

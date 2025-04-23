@@ -51,6 +51,7 @@ from open_webui.utils.logger import start_logger
 from open_webui.socket.main import (
     app as socket_app,
     periodic_usage_pool_cleanup,
+    periodic_redis_cleanup,
 )
 from open_webui.routers import (
     audio,
@@ -148,9 +149,6 @@ from open_webui.config import (
     AUDIO_STT_MODEL,
     AUDIO_STT_OPENAI_API_BASE_URL,
     AUDIO_STT_OPENAI_API_KEY,
-    AUDIO_STT_AZURE_API_KEY,
-    AUDIO_STT_AZURE_REGION,
-    AUDIO_STT_AZURE_LOCALES,
     AUDIO_TTS_API_KEY,
     AUDIO_TTS_ENGINE,
     AUDIO_TTS_MODEL,
@@ -160,13 +158,12 @@ from open_webui.config import (
     AUDIO_TTS_VOICE,
     AUDIO_TTS_AZURE_SPEECH_REGION,
     AUDIO_TTS_AZURE_SPEECH_OUTPUT_FORMAT,
-    PLAYWRIGHT_WS_URL,
+    PLAYWRIGHT_WS_URI,
     PLAYWRIGHT_TIMEOUT,
     FIRECRAWL_API_BASE_URL,
     FIRECRAWL_API_KEY,
-    WEB_LOADER_ENGINE,
+    RAG_WEB_LOADER_ENGINE,
     WHISPER_MODEL,
-    WHISPER_VAD_FILTER,
     DEEPGRAM_API_KEY,
     WHISPER_MODEL_AUTO_UPDATE,
     WHISPER_MODEL_DIR,
@@ -206,13 +203,12 @@ from open_webui.config import (
     YOUTUBE_LOADER_LANGUAGE,
     YOUTUBE_LOADER_PROXY_URL,
     # Retrieval (Web Search)
-    ENABLE_WEB_SEARCH,
-    WEB_SEARCH_ENGINE,
+    RAG_WEB_SEARCH_ENGINE,
     BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL,
-    WEB_SEARCH_RESULT_COUNT,
-    WEB_SEARCH_CONCURRENT_REQUESTS,
-    WEB_SEARCH_TRUST_ENV,
-    WEB_SEARCH_DOMAIN_FILTER_LIST,
+    RAG_WEB_SEARCH_RESULT_COUNT,
+    RAG_WEB_SEARCH_CONCURRENT_REQUESTS,
+    RAG_WEB_SEARCH_TRUST_ENV,
+    RAG_WEB_SEARCH_DOMAIN_FILTER_LIST,
     JINA_API_KEY,
     SEARCHAPI_API_KEY,
     SEARCHAPI_ENGINE,
@@ -230,8 +226,6 @@ from open_webui.config import (
     BRAVE_SEARCH_API_KEY,
     EXA_API_KEY,
     PERPLEXITY_API_KEY,
-    SOUGOU_API_SID,
-    SOUGOU_API_SK,
     KAGI_SEARCH_API_KEY,
     MOJEEK_SEARCH_API_KEY,
     BOCHA_SEARCH_API_KEY,
@@ -242,7 +236,8 @@ from open_webui.config import (
     ONEDRIVE_CLIENT_ID,
     ENABLE_RAG_HYBRID_SEARCH,
     ENABLE_RAG_LOCAL_WEB_FETCH,
-    ENABLE_WEB_LOADER_SSL_VERIFICATION,
+    ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION,
+    ENABLE_RAG_WEB_SEARCH,
     ENABLE_GOOGLE_DRIVE_INTEGRATION,
     ENABLE_ONEDRIVE_INTEGRATION,
     UPLOAD_DIR,
@@ -346,7 +341,6 @@ from open_webui.env import (
     RESET_CONFIG_ON_START,
     OFFLINE_MODE,
     ENABLE_OTEL,
-    EXTERNAL_PWA_MANIFEST_URL,
 )
 
 
@@ -373,11 +367,7 @@ from open_webui.utils.auth import (
 from open_webui.utils.oauth import OAuthManager
 from open_webui.utils.security_headers import SecurityHeadersMiddleware
 
-from open_webui.tasks import (
-    list_task_ids_by_chat_id,
-    stop_task,
-    list_tasks,
-)  # Import from tasks.py
+from open_webui.tasks import stop_task, list_tasks  # Import from tasks.py
 
 from open_webui.utils.redis import get_sentinels_from_env
 
@@ -437,7 +427,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Open WebUI",
     docs_url="/docs" if ENV == "dev" else None,
     openapi_url="/openapi.json" if ENV == "dev" else None,
     redoc_url=None,
@@ -454,6 +443,7 @@ app.state.config = AppConfig(
 app.state.WEBUI_NAME = WEBUI_NAME
 app.state.LICENSE_METADATA = None
 
+asyncio.create_task(periodic_redis_cleanup())
 
 ########################################
 #
@@ -576,7 +566,6 @@ app.state.config.LDAP_CIPHERS = LDAP_CIPHERS
 
 app.state.AUTH_TRUSTED_EMAIL_HEADER = WEBUI_AUTH_TRUSTED_EMAIL_HEADER
 app.state.AUTH_TRUSTED_NAME_HEADER = WEBUI_AUTH_TRUSTED_NAME_HEADER
-app.state.EXTERNAL_PWA_MANIFEST_URL = EXTERNAL_PWA_MANIFEST_URL
 
 app.state.USER_COUNT = None
 app.state.TOOLS = {}
@@ -599,7 +588,9 @@ app.state.config.FILE_MAX_COUNT = RAG_FILE_MAX_COUNT
 app.state.config.RAG_FULL_CONTEXT = RAG_FULL_CONTEXT
 app.state.config.BYPASS_EMBEDDING_AND_RETRIEVAL = BYPASS_EMBEDDING_AND_RETRIEVAL
 app.state.config.ENABLE_RAG_HYBRID_SEARCH = ENABLE_RAG_HYBRID_SEARCH
-app.state.config.ENABLE_WEB_LOADER_SSL_VERIFICATION = ENABLE_WEB_LOADER_SSL_VERIFICATION
+app.state.config.ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION = (
+    ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION
+)
 
 app.state.config.CONTENT_EXTRACTION_ENGINE = CONTENT_EXTRACTION_ENGINE
 app.state.config.TIKA_SERVER_URL = TIKA_SERVER_URL
@@ -632,16 +623,12 @@ app.state.config.YOUTUBE_LOADER_LANGUAGE = YOUTUBE_LOADER_LANGUAGE
 app.state.config.YOUTUBE_LOADER_PROXY_URL = YOUTUBE_LOADER_PROXY_URL
 
 
-app.state.config.ENABLE_WEB_SEARCH = ENABLE_WEB_SEARCH
-app.state.config.WEB_SEARCH_ENGINE = WEB_SEARCH_ENGINE
-app.state.config.WEB_SEARCH_DOMAIN_FILTER_LIST = WEB_SEARCH_DOMAIN_FILTER_LIST
-app.state.config.WEB_SEARCH_RESULT_COUNT = WEB_SEARCH_RESULT_COUNT
-app.state.config.WEB_SEARCH_CONCURRENT_REQUESTS = WEB_SEARCH_CONCURRENT_REQUESTS
-app.state.config.WEB_LOADER_ENGINE = WEB_LOADER_ENGINE
-app.state.config.WEB_SEARCH_TRUST_ENV = WEB_SEARCH_TRUST_ENV
+app.state.config.ENABLE_RAG_WEB_SEARCH = ENABLE_RAG_WEB_SEARCH
+app.state.config.RAG_WEB_SEARCH_ENGINE = RAG_WEB_SEARCH_ENGINE
 app.state.config.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL = (
     BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL
 )
+app.state.config.RAG_WEB_SEARCH_DOMAIN_FILTER_LIST = RAG_WEB_SEARCH_DOMAIN_FILTER_LIST
 
 app.state.config.ENABLE_GOOGLE_DRIVE_INTEGRATION = ENABLE_GOOGLE_DRIVE_INTEGRATION
 app.state.config.ENABLE_ONEDRIVE_INTEGRATION = ENABLE_ONEDRIVE_INTEGRATION
@@ -666,11 +653,12 @@ app.state.config.BING_SEARCH_V7_ENDPOINT = BING_SEARCH_V7_ENDPOINT
 app.state.config.BING_SEARCH_V7_SUBSCRIPTION_KEY = BING_SEARCH_V7_SUBSCRIPTION_KEY
 app.state.config.EXA_API_KEY = EXA_API_KEY
 app.state.config.PERPLEXITY_API_KEY = PERPLEXITY_API_KEY
-app.state.config.SOUGOU_API_SID = SOUGOU_API_SID
-app.state.config.SOUGOU_API_SK = SOUGOU_API_SK
 
-
-app.state.config.PLAYWRIGHT_WS_URL = PLAYWRIGHT_WS_URL
+app.state.config.RAG_WEB_SEARCH_RESULT_COUNT = RAG_WEB_SEARCH_RESULT_COUNT
+app.state.config.RAG_WEB_SEARCH_CONCURRENT_REQUESTS = RAG_WEB_SEARCH_CONCURRENT_REQUESTS
+app.state.config.RAG_WEB_LOADER_ENGINE = RAG_WEB_LOADER_ENGINE
+app.state.config.RAG_WEB_SEARCH_TRUST_ENV = RAG_WEB_SEARCH_TRUST_ENV
+app.state.config.PLAYWRIGHT_WS_URI = PLAYWRIGHT_WS_URI
 app.state.config.PLAYWRIGHT_TIMEOUT = PLAYWRIGHT_TIMEOUT
 app.state.config.FIRECRAWL_API_BASE_URL = FIRECRAWL_API_BASE_URL
 app.state.config.FIRECRAWL_API_KEY = FIRECRAWL_API_KEY
@@ -790,12 +778,7 @@ app.state.config.STT_ENGINE = AUDIO_STT_ENGINE
 app.state.config.STT_MODEL = AUDIO_STT_MODEL
 
 app.state.config.WHISPER_MODEL = WHISPER_MODEL
-app.state.config.WHISPER_VAD_FILTER = WHISPER_VAD_FILTER
 app.state.config.DEEPGRAM_API_KEY = DEEPGRAM_API_KEY
-
-app.state.config.AUDIO_STT_AZURE_API_KEY = AUDIO_STT_AZURE_API_KEY
-app.state.config.AUDIO_STT_AZURE_REGION = AUDIO_STT_AZURE_REGION
-app.state.config.AUDIO_STT_AZURE_LOCALES = AUDIO_STT_AZURE_LOCALES
 
 app.state.config.TTS_OPENAI_API_BASE_URL = AUDIO_TTS_OPENAI_API_BASE_URL
 app.state.config.TTS_OPENAI_API_KEY = AUDIO_TTS_OPENAI_API_KEY
@@ -1025,19 +1008,14 @@ async def get_models(request: Request, user=Depends(get_verified_user)):
         if "pipeline" in model and model["pipeline"].get("type", None) == "filter":
             continue
 
-        try:
-            model_tags = [
-                tag.get("name")
-                for tag in model.get("info", {}).get("meta", {}).get("tags", [])
-            ]
-            tags = [tag.get("name") for tag in model.get("tags", [])]
+        model_tags = [
+            tag.get("name")
+            for tag in model.get("info", {}).get("meta", {}).get("tags", [])
+        ]
+        tags = [tag.get("name") for tag in model.get("tags", [])]
 
-            tags = list(set(model_tags + tags))
-            model["tags"] = [{"name": tag} for tag in tags]
-        except Exception as e:
-            log.debug(f"Error processing model tags: {e}")
-            model["tags"] = []
-            pass
+        tags = list(set(model_tags + tags))
+        model["tags"] = [{"name": tag} for tag in tags]
 
         models.append(model)
 
@@ -1077,7 +1055,6 @@ async def chat_completion(
     model_item = form_data.pop("model_item", {})
     tasks = form_data.pop("background_tasks", None)
 
-    metadata = {}
     try:
         if not model_item.get("direct", False):
             model_id = form_data.get("model", None)
@@ -1133,15 +1110,13 @@ async def chat_completion(
 
     except Exception as e:
         log.debug(f"Error processing chat payload: {e}")
-        if metadata.get("chat_id") and metadata.get("message_id"):
-            # Update the chat message with the error
-            Chats.upsert_message_to_chat_by_id_and_message_id(
-                metadata["chat_id"],
-                metadata["message_id"],
-                {
-                    "error": {"content": str(e)},
-                },
-            )
+        Chats.upsert_message_to_chat_by_id_and_message_id(
+            metadata["chat_id"],
+            metadata["message_id"],
+            {
+                "error": {"content": str(e)},
+            },
+        )
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1207,7 +1182,7 @@ async def chat_action(
 @app.post("/api/tasks/stop/{task_id}")
 async def stop_task_endpoint(task_id: str, user=Depends(get_verified_user)):
     try:
-        result = await stop_task(task_id)
+        result = await stop_task(task_id)  # Use the function from tasks.py
         return result
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -1215,19 +1190,7 @@ async def stop_task_endpoint(task_id: str, user=Depends(get_verified_user)):
 
 @app.get("/api/tasks")
 async def list_tasks_endpoint(user=Depends(get_verified_user)):
-    return {"tasks": list_tasks()}
-
-
-@app.get("/api/tasks/chat/{chat_id}")
-async def list_tasks_by_chat_id_endpoint(chat_id: str, user=Depends(get_verified_user)):
-    chat = Chats.get_chat_by_id(chat_id)
-    if chat is None or chat.user_id != user.id:
-        return {"task_ids": []}
-
-    task_ids = list_task_ids_by_chat_id(chat_id)
-
-    print(f"Task IDs for chat {chat_id}: {task_ids}")
-    return {"task_ids": task_ids}
+    return {"tasks": list_tasks()}  # Use the function from tasks.py
 
 
 ##################################
@@ -1283,7 +1246,7 @@ async def get_app_config(request: Request):
                 {
                     "enable_direct_connections": app.state.config.ENABLE_DIRECT_CONNECTIONS,
                     "enable_channels": app.state.config.ENABLE_CHANNELS,
-                    "enable_web_search": app.state.config.ENABLE_WEB_SEARCH,
+                    "enable_web_search": app.state.config.ENABLE_RAG_WEB_SEARCH,
                     "enable_code_execution": app.state.config.ENABLE_CODE_EXECUTION,
                     "enable_code_interpreter": app.state.config.ENABLE_CODE_INTERPRETER,
                     "enable_image_generation": app.state.config.ENABLE_IMAGE_GENERATION,
@@ -1429,32 +1392,29 @@ async def oauth_callback(provider: str, request: Request, response: Response):
 
 @app.get("/manifest.json")
 async def get_manifest_json():
-    if app.state.EXTERNAL_PWA_MANIFEST_URL:
-        return requests.get(app.state.EXTERNAL_PWA_MANIFEST_URL).json()
-    else:
-        return {
-            "name": app.state.WEBUI_NAME,
-            "short_name": app.state.WEBUI_NAME,
-            "description": "Open WebUI is an open, extensible, user-friendly interface for AI that adapts to your workflow.",
-            "start_url": "/",
-            "display": "standalone",
-            "background_color": "#343541",
-            "orientation": "natural",
-            "icons": [
-                {
-                    "src": "/static/logo.png",
-                    "type": "image/png",
-                    "sizes": "500x500",
-                    "purpose": "any",
-                },
-                {
-                    "src": "/static/logo.png",
-                    "type": "image/png",
-                    "sizes": "500x500",
-                    "purpose": "maskable",
-                },
-            ],
-        }
+    return {
+        "name": app.state.WEBUI_NAME,
+        "short_name": app.state.WEBUI_NAME,
+        "description": "Open WebUI is an open, extensible, user-friendly interface for AI that adapts to your workflow.",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#343541",
+        "orientation": "natural",
+        "icons": [
+            {
+                "src": "/static/logo.png",
+                "type": "image/png",
+                "sizes": "500x500",
+                "purpose": "any",
+            },
+            {
+                "src": "/static/logo.png",
+                "type": "image/png",
+                "sizes": "500x500",
+                "purpose": "maskable",
+            },
+        ],
+    }
 
 
 @app.get("/opensearch.xml")

@@ -41,6 +41,7 @@ from open_webui.utils.auth import (
     get_verified_user,
     get_current_user,
     get_password_hash,
+    del_token
 )
 from open_webui.utils.webhook import post_webhook
 from open_webui.utils.access_control import get_permissions
@@ -230,15 +231,11 @@ async def ldap_auth(request: Request, response: Response, form_data: LdapForm):
 
         entry = connection_app.entries[0]
         username = str(entry[f"{LDAP_ATTRIBUTE_FOR_USERNAME}"]).lower()
-        email = entry[f"{LDAP_ATTRIBUTE_FOR_MAIL}"].value  # retrive the Attribute value
-        if not email:
+        email = str(entry[f"{LDAP_ATTRIBUTE_FOR_MAIL}"])
+        if not email or email == "" or email == "[]":
             raise HTTPException(400, "User does not have a valid email address.")
-        elif isinstance(email, str):
-            email = email.lower()
-        elif isinstance(email, list):
-            email = email[0].lower()
         else:
-            email = str(email).lower()
+            email = email.lower()
 
         cn = str(entry["cn"])
         user_dn = entry.entry_dn
@@ -458,13 +455,6 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
             # Disable signup after the first user is created
             request.app.state.config.ENABLE_SIGNUP = False
 
-        # The password passed to bcrypt must be 72 bytes or fewer. If it is longer, it will be truncated before hashing.
-        if len(form_data.password.encode("utf-8")) > 72:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.PASSWORD_TOO_LONG,
-            )
-
         hashed = get_password_hash(form_data.password)
         user = Auths.insert_new_auth(
             form_data.email.lower(),
@@ -535,9 +525,11 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
         raise HTTPException(500, detail="An internal error occurred during signup.")
 
 
+# takin code：用户登出接口，删除所有相关cookie
 @router.get("/signout")
 async def signout(request: Request, response: Response):
     response.delete_cookie("token")
+    del_token(response)
 
     if ENABLE_OAUTH_SIGNUP.value:
         oauth_id_token = request.cookies.get("oauth_id_token")
@@ -574,8 +566,10 @@ async def signout(request: Request, response: Response):
 ############################
 
 
+# takin code：添加新用户的API端点，已去除管理员权限验证
 @router.post("/add", response_model=SigninResponse)
-async def add_user(form_data: AddUserForm, user=Depends(get_admin_user)):
+# async def add_user(form_data: AddUserForm, user=Depends(get_admin_user)):
+async def add_user(form_data: AddUserForm):
     if not validate_email_format(form_data.email.lower()):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.INVALID_EMAIL_FORMAT
