@@ -1,4 +1,6 @@
 <script>
+	// takin code:导入takin；doc #https://svelte.dev/docs/kit/$env-static-public
+	import { PUBLIC_TAKIN_API_URL } from '$env/static/public';
 	import { io } from 'socket.io-client';
 	import { spring } from 'svelte/motion';
 	import PyodideWorker from '$lib/workers/pyodide.worker?worker';
@@ -211,9 +213,8 @@
 		console.log('executeTool', data, toolServer);
 
 		if (toolServer) {
-			console.log(toolServer);
 			const res = await executeToolServer(
-				(toolServer?.auth_type ?? 'bearer') === 'bearer' ? toolServer?.key : localStorage.token,
+				toolServer.key,
 				toolServer.url,
 				data?.name,
 				data?.params,
@@ -531,37 +532,44 @@
 			await WEBUI_NAME.set(backendConfig.name);
 
 			if ($config) {
+				// 根据配置初始化WebSocket连接
 				await setupSocket($config.features?.enable_websocket ?? true);
 
-				const currentUrl = `${window.location.pathname}${window.location.search}`;
-				const encodedUrl = encodeURIComponent(currentUrl);
+				// takin code：尝试获取当前会话用户信息，使用本地存储的token
+				const sessionUser = await getSessionUser(localStorage.token).catch((error) => {			
+					// 如果获取失败，返回null（可能是token无效或过期）
+					return null;
+				});
+				console.log('sessionUser',sessionUser);
 
-				if (localStorage.token) {
-					// Get Session User Info
-					const sessionUser = await getSessionUser(localStorage.token).catch((error) => {
-						toast.error(`${error}`);
-						return null;
-					});
-
-					if (sessionUser) {
-						// Save Session User to Store
-						$socket.emit('user-join', { auth: { token: sessionUser.token } });
-
-						await user.set(sessionUser);
-						await config.set(await getBackendConfig());
-					} else {
-						// Redirect Invalid Session User to /auth Page
-						localStorage.removeItem('token');
-						await goto(`/auth?redirect=${encodedUrl}`);
+				if (sessionUser) {
+					// 如果成功获取到用户信息
+					
+					// 如果服务器返回了新的token，更新本地存储
+					if (sessionUser.token) {
+						localStorage.token = sessionUser.token;
 					}
+					
+					// 通过WebSocket加入用户会话，发送认证信息
+					$socket.emit('user-join', { auth: { token: sessionUser.token } });
+
+					// 注册WebSocket事件处理器
+					$socket?.on('chat-events', chatEventHandler);     // 处理聊天相关事件
+					$socket?.on('channel-events', channelEventHandler); // 处理频道相关事件
+
+					// 更新全局状态
+					await user.set(sessionUser);          // 保存用户信息到store
+					await config.set(await getBackendConfig()); // 获取并保存后端配置
 				} else {
-					// Don't redirect if we're already on the auth page
-					// Needed because we pass in tokens from OAuth logins via URL fragments
-					if ($page.url.pathname !== '/auth') {
-						await goto(`/auth?redirect=${encodedUrl}`);
-					}
+					// 如果获取用户信息失败（未登录或session过期）
+					
+					// 清除本地token
+					localStorage.removeItem('token');
+					// 重定向到Takin的登录页面
+					window.location.href = `${PUBLIC_TAKIN_API_URL}/signin`;
 				}
 			}
+
 		} else {
 			// Redirect to /error when Backend Not Detected
 			await goto(`/error`);

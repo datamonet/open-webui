@@ -51,6 +51,7 @@ from open_webui.utils.logger import start_logger
 from open_webui.socket.main import (
     app as socket_app,
     periodic_usage_pool_cleanup,
+    periodic_redis_cleanup,
 )
 from open_webui.routers import (
     audio,
@@ -454,6 +455,7 @@ app.state.config = AppConfig(
 app.state.WEBUI_NAME = WEBUI_NAME
 app.state.LICENSE_METADATA = None
 
+asyncio.create_task(periodic_redis_cleanup())
 
 ########################################
 #

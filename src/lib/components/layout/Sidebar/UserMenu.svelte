@@ -9,6 +9,7 @@
 	import { fade, slide } from 'svelte/transition';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { userSignOut } from '$lib/apis/auths';
+	import { PUBLIC_TAKIN_API_URL } from '$env/static/public';
 
 	const i18n = getContext('i18n');
 
@@ -160,7 +161,8 @@
 					user.set(null);
 
 					localStorage.removeItem('token');
-					location.href = '/auth';
+					// takin code：退出登录后到takin
+					location.href = `${PUBLIC_TAKIN_API_URL}/signin`;
 
 					show = false;
 				}}
@@ -186,8 +188,8 @@
 				</div>
 				<div class=" self-center truncate">{$i18n.t('Sign Out')}</div>
 			</button>
-
-			{#if $activeUserIds?.length > 0}
+				<!-- takin code: hidden active users -->
+			<!-- {#if $activeUserIds?.length > 0}
 				<hr class=" border-gray-100 dark:border-gray-850 my-1 p-0" />
 
 				<Tooltip
@@ -215,7 +217,7 @@
 						</div>
 					</div>
 				</Tooltip>
-			{/if}
+			{/if} -->
 
 			<!-- <DropdownMenu.Item class="flex items-center px-3 py-2 text-sm ">
 				<div class="flex items-center">Profile</div>

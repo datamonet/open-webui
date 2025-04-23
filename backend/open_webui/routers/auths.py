@@ -41,6 +41,7 @@ from open_webui.utils.auth import (
     get_verified_user,
     get_current_user,
     get_password_hash,
+    del_token
 )
 from open_webui.utils.webhook import post_webhook
 from open_webui.utils.access_control import get_permissions
@@ -535,9 +536,11 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
         raise HTTPException(500, detail="An internal error occurred during signup.")
 
 
+# takin code：用户登出接口，删除所有相关cookie
 @router.get("/signout")
 async def signout(request: Request, response: Response):
     response.delete_cookie("token")
+    del_token(response)
 
     if ENABLE_OAUTH_SIGNUP.value:
         oauth_id_token = request.cookies.get("oauth_id_token")
@@ -574,8 +577,10 @@ async def signout(request: Request, response: Response):
 ############################
 
 
+# takin code：添加新用户的API端点，已去除管理员权限验证
 @router.post("/add", response_model=SigninResponse)
-async def add_user(form_data: AddUserForm, user=Depends(get_admin_user)):
+# async def add_user(form_data: AddUserForm, user=Depends(get_admin_user)):
+async def add_user(form_data: AddUserForm):
     if not validate_email_format(form_data.email.lower()):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.INVALID_EMAIL_FORMAT

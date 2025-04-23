@@ -161,7 +161,9 @@ async def generate_title(
     else:
         models = request.app.state.MODELS
 
-    model_id = form_data["model"]
+    # takin code: gen title function default model use gpt-4o-mini
+    model_id = 'gpt-4o-mini'
+    # model_id = form_data["model"]
     if model_id not in models:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -188,14 +190,23 @@ async def generate_title(
 
     messages = form_data["messages"]
 
-    # Remove reasoning details from the messages
+    # takin code: Remove reasoning details from the messages and limit content length
+    MAX_CHARS_PER_MESSAGE = 1000  # Limit each message to 1000 characters
+    MAX_MESSAGES = 10  # Only use last 10 messages for title generation
+    
+    # Take only the last N messages
+    messages = messages[-MAX_MESSAGES:]
+    
     for message in messages:
+        # Remove reasoning details
         message["content"] = re.sub(
             r"<details\s+type=\"reasoning\"[^>]*>.*?<\/details>",
             "",
             message["content"],
             flags=re.S,
         ).strip()
+        # Truncate long messages
+        message["content"] = message["content"][:MAX_CHARS_PER_MESSAGE]
 
     content = title_generation_template(
         template,
@@ -259,7 +270,9 @@ async def generate_chat_tags(
     else:
         models = request.app.state.MODELS
 
-    model_id = form_data["model"]
+    # takin code: gen tags function default model use gpt-4o-mini
+    model_id = 'gpt-4o-mini'
+    # model_id = form_data["model"]
     if model_id not in models:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -414,7 +427,9 @@ async def generate_queries(
     else:
         models = request.app.state.MODELS
 
-    model_id = form_data["model"]
+    # takin code: gen queries function default model use gpt-4o-mini
+    model_id = 'gpt-4o-mini'
+    # model_id = form_data["model"]
     if model_id not in models:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

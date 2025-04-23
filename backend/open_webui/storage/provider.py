@@ -58,11 +58,21 @@ class StorageProvider(ABC):
 
 class LocalStorageProvider(StorageProvider):
     @staticmethod
-    def upload_file(file: BinaryIO, filename: str) -> Tuple[bytes, str]:
+    def upload_file(file: BinaryIO, filename: str, user_id: str = None) -> Tuple[bytes, str]:
         contents = file.read()
         if not contents:
             raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
-        file_path = f"{UPLOAD_DIR}/{filename}"
+            
+        #takin code:takin code, add open-webui storage prefix.构建存储路径
+        storage_path = filename
+        if user_id:
+            storage_path = f"{user_id}/{filename}"
+            
+        file_path = f"{UPLOAD_DIR}/{storage_path}"
+        
+        # 确保目录存在
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
         with open(file_path, "wb") as f:
             f.write(contents)
         return contents, file_path
@@ -131,11 +141,17 @@ class S3StorageProvider(StorageProvider):
         self.bucket_name = S3_BUCKET_NAME
         self.key_prefix = S3_KEY_PREFIX if S3_KEY_PREFIX else ""
 
-    def upload_file(self, file: BinaryIO, filename: str) -> Tuple[bytes, str]:
+    def upload_file(self, file: BinaryIO, filename: str, user_id: str = None) -> Tuple[bytes, str]:
         """Handles uploading of the file to S3 storage."""
-        _, file_path = LocalStorageProvider.upload_file(file, filename)
+        _, file_path = LocalStorageProvider.upload_file(file, filename, user_id)
         try:
-            s3_key = os.path.join(self.key_prefix, filename)
+            # takin code:takin code, add open-webui storage prefix.构建 S3 存储路径
+            s3_key = filename
+            if user_id:
+                s3_key = f"{user_id}/{filename}"
+            if self.key_prefix:
+                s3_key = os.path.join(self.key_prefix, s3_key)
+                
             self.s3_client.upload_file(file_path, self.bucket_name, s3_key)
             return (
                 open(file_path, "rb").read(),
@@ -207,13 +223,18 @@ class GCSStorageProvider(StorageProvider):
             self.gcs_client = storage.Client()
         self.bucket = self.gcs_client.bucket(GCS_BUCKET_NAME)
 
-    def upload_file(self, file: BinaryIO, filename: str) -> Tuple[bytes, str]:
+    def upload_file(self, file: BinaryIO, filename: str, user_id: str = None) -> Tuple[bytes, str]:
         """Handles uploading of the file to GCS storage."""
-        contents, file_path = LocalStorageProvider.upload_file(file, filename)
+        contents, file_path = LocalStorageProvider.upload_file(file, filename, user_id)
         try:
-            blob = self.bucket.blob(filename)
+            # 构建 GCS 存储路径
+            storage_path = filename
+            if user_id:
+                storage_path = f"open-webui/{user_id}/{filename}"
+                
+            blob = self.bucket.blob(storage_path)
             blob.upload_from_filename(file_path)
-            return contents, "gs://" + self.bucket_name + "/" + filename
+            return contents, "gs://" + self.bucket_name + "/" + storage_path
         except GoogleCloudError as e:
             raise RuntimeError(f"Error uploading file to GCS: {e}")
 

@@ -880,8 +880,16 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 log.exception(e)
 
     try:
-        form_data, flags = await chat_completion_files_handler(request, form_data, user)
-        sources.extend(flags.get("sources", []))
+        #takin code:import assistant api model
+        SPECIAL_ASSISTANT_MODEL_IDS = os.getenv('PUBLIC_SPECIAL_ASSISTANT_MODEL_IDS', 'gpt4o_mini_assistant').split(',')
+
+        # takin code: assistant api model need skip file embedding
+        if form_data.get("model") in SPECIAL_ASSISTANT_MODEL_IDS:
+            sources.extend([])
+        else:
+            form_data, flags = await chat_completion_files_handler(request, form_data, user)
+            sources.extend(flags.get("sources", []))
+            
     except Exception as e:
         log.exception(e)
 
