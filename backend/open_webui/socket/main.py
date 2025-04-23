@@ -9,8 +9,9 @@ from open_webui.models.users import Users, UserNameResponse
 from open_webui.models.channels import Channels
 from open_webui.models.chats import Chats
 from open_webui.utils.redis import (
+    parse_redis_sentinel_url,
     get_sentinels_from_env,
-    get_sentinel_url_from_env,
+    AsyncRedisSentinelManager,
 )
 
 from open_webui.env import (
@@ -37,10 +38,15 @@ log.setLevel(SRC_LOG_LEVELS["SOCKET"])
 
 if WEBSOCKET_MANAGER == "redis":
     if WEBSOCKET_SENTINEL_HOSTS:
-        mgr = socketio.AsyncRedisManager(
-            get_sentinel_url_from_env(
-                WEBSOCKET_REDIS_URL, WEBSOCKET_SENTINEL_HOSTS, WEBSOCKET_SENTINEL_PORT
-            )
+        redis_config = parse_redis_sentinel_url(WEBSOCKET_REDIS_URL)
+        mgr = AsyncRedisSentinelManager(
+            WEBSOCKET_SENTINEL_HOSTS.split(","),
+            sentinel_port=int(WEBSOCKET_SENTINEL_PORT),
+            redis_port=redis_config["port"],
+            service=redis_config["service"],
+            db=redis_config["db"],
+            username=redis_config["username"],
+            password=redis_config["password"],
         )
     else:
         mgr = socketio.AsyncRedisManager(
@@ -54,6 +60,7 @@ if WEBSOCKET_MANAGER == "redis":
                 "max_connections": 10000  # Adjust based on your needs
             }
         )
+
     sio = socketio.AsyncServer(
         cors_allowed_origins=[],
         async_mode="asgi",

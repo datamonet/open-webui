@@ -84,49 +84,47 @@
 		}
 	);
 
-	$: filteredItems = (
-		searchValue
-			? fuse
-					.search(searchValue)
-					.map((e) => {
-						return e.item;
-					})
-					.filter((item) => {
-						if (selectedTag === '') {
-							return true;
-						}
-						return (item.model?.tags ?? []).map((tag) => tag.name).includes(selectedTag);
-					})
-					.filter((item) => {
-						if (selectedConnectionType === '') {
-							return true;
-						} else if (selectedConnectionType === 'ollama') {
-							return item.model?.owned_by === 'ollama';
-						} else if (selectedConnectionType === 'openai') {
-							return item.model?.owned_by === 'openai';
-						} else if (selectedConnectionType === 'direct') {
-							return item.model?.direct;
-						}
-					})
-			: items
-					.filter((item) => {
-						if (selectedTag === '') {
-							return true;
-						}
-						return (item.model?.tags ?? []).map((tag) => tag.name).includes(selectedTag);
-					})
-					.filter((item) => {
-						if (selectedConnectionType === '') {
-							return true;
-						} else if (selectedConnectionType === 'ollama') {
-							return item.model?.owned_by === 'ollama';
-						} else if (selectedConnectionType === 'openai') {
-							return item.model?.owned_by === 'openai';
-						} else if (selectedConnectionType === 'direct') {
-							return item.model?.direct;
-						}
-					})
-	).filter((item) => !(item.model?.info?.meta?.hidden ?? false));
+	$: filteredItems = searchValue
+		? fuse
+				.search(searchValue)
+				.map((e) => {
+					return e.item;
+				})
+				.filter((item) => {
+					if (selectedTag === '') {
+						return true;
+					}
+					return (item.model?.tags ?? []).map((tag) => tag.name).includes(selectedTag);
+				})
+				.filter((item) => {
+					if (selectedConnectionType === '') {
+						return true;
+					} else if (selectedConnectionType === 'ollama') {
+						return item.model?.owned_by === 'ollama';
+					} else if (selectedConnectionType === 'openai') {
+						return item.model?.owned_by === 'openai';
+					} else if (selectedConnectionType === 'direct') {
+						return item.model?.direct;
+					}
+				})
+		: items
+				.filter((item) => {
+					if (selectedTag === '') {
+						return true;
+					}
+					return (item.model?.tags ?? []).map((tag) => tag.name).includes(selectedTag);
+				})
+				.filter((item) => {
+					if (selectedConnectionType === '') {
+						return true;
+					} else if (selectedConnectionType === 'ollama') {
+						return item.model?.owned_by === 'ollama';
+					} else if (selectedConnectionType === 'openai') {
+						return item.model?.owned_by === 'openai';
+					} else if (selectedConnectionType === 'direct') {
+						return item.model?.direct;
+					}
+				});
 
 	$: if (selectedTag || selectedConnectionType) {
 		resetView();
@@ -284,10 +282,7 @@
 		ollamaVersion = await getOllamaVersion(localStorage.token).catch((error) => false);
 
 		if (items) {
-			tags = items
-				.filter((item) => !(item.model?.info?.meta?.hidden ?? false))
-				.flatMap((item) => item.model?.tags ?? [])
-				.map((tag) => tag.name);
+			tags = items.flatMap((item) => item.model?.tags ?? []).map((tag) => tag.name);
 
 			// Remove duplicates and sort
 			tags = Array.from(new Set(tags)).sort((a, b) => a.localeCompare(b));
@@ -378,7 +373,7 @@
 				</div>
 			{/if}
 
-			<div class="px-3 max-h-64 overflow-y-auto scrollbar-hidden group relative">
+			<div class="px-3 mb-2 max-h-64 overflow-y-auto scrollbar-hidden group relative">
 				{#if tags && items.filter((item) => !(item.model?.info?.meta?.hidden ?? false)).length > 0}
 					<div
 						class=" flex w-full sticky top-0 z-10 bg-white dark:bg-gray-850 overflow-x-auto scrollbar-none"
@@ -393,20 +388,18 @@
 							class="flex gap-1 w-fit text-center text-sm font-medium rounded-full bg-transparent px-1.5 pb-0.5"
 							bind:this={tagsContainerElement}
 						>
-							{#if (items.find((item) => item.model?.owned_by === 'ollama') && items.find((item) => item.model?.owned_by === 'openai')) || items.find((item) => item.model?.direct) || tags.length > 0}
-								<button
-									class="min-w-fit outline-none p-1.5 {selectedTag === '' &&
-									selectedConnectionType === ''
-										? ''
-										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
-									on:click={() => {
-										selectedConnectionType = '';
-										selectedTag = '';
-									}}
-								>
-									{$i18n.t('All')}
-								</button>
-							{/if}
+							<button
+								class="min-w-fit outline-none p-1.5 {selectedTag === '' &&
+								selectedConnectionType === ''
+									? ''
+									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
+								on:click={() => {
+									selectedConnectionType = '';
+									selectedTag = '';
+								}}
+							>
+								{$i18n.t('All')}
+							</button>
 
 							{#if items.find((item) => item.model?.owned_by === 'ollama') && items.find((item) => item.model?.owned_by === 'openai')}
 								<button
@@ -464,7 +457,7 @@
 					</div>
 				{/if}
 
-				{#each filteredItems as item, index}
+				{#each filteredItems.filter((item) => !(item.model?.info?.meta?.hidden ?? false)) as item, index}
 					<button
 						aria-label="model-item"
 						class="flex w-full text-left font-medium line-clamp-1 select-none items-center rounded-button py-2 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer data-highlighted:bg-muted {index ===
@@ -634,7 +627,7 @@
 						{/if}
 					</button>
 				{:else}
-					<div class="">
+					<div>
 						<div class="block px-3 py-2 text-sm text-gray-700 dark:text-gray-100">
 							{$i18n.t('No results found')}
 						</div>
@@ -746,7 +739,9 @@
 			</div>
 
 			{#if showTemporaryChatControl}
-				<div class="flex items-center mx-2 mb-2">
+				<hr class="border-gray-100 dark:border-gray-800" />
+
+				<div class="flex items-center mx-2 my-2">
 					<button
 						class="flex justify-between w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 px-3 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer data-highlighted:bg-muted"
 						on:click={async () => {
@@ -778,8 +773,6 @@
 						</div>
 					</button>
 				</div>
-			{:else if filteredItems.length === 0}
-				<div class="mb-3"></div>
 			{/if}
 
 			<div class="hidden w-[42rem]" />

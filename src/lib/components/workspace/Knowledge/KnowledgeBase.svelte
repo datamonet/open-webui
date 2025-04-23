@@ -547,14 +547,6 @@
 		dropZone?.removeEventListener('drop', onDrop);
 		dropZone?.removeEventListener('dragleave', onDragLeave);
 	});
-
-	const decodeString = (str: string) => {
-		try {
-			return decodeURIComponent(str);
-		} catch (e) {
-			return str;
-		}
-	};
 </script>
 
 {#if dragged}
@@ -706,7 +698,7 @@
 										href={selectedFile.id ? `/api/v1/files/${selectedFile.id}/content` : '#'}
 										target="_blank"
 									>
-										{decodeString(selectedFile?.meta?.name)}
+										{decodeURIComponent(selectedFile?.meta?.name)}
 									</a>
 								</div>
 

@@ -77,7 +77,6 @@ def query_doc(
     collection_name: str, query_embedding: list[float], k: int, user: UserModel = None
 ):
     try:
-        log.debug(f"query_doc:doc {collection_name}")
         result = VECTOR_DB_CLIENT.search(
             collection_name=collection_name,
             vectors=[query_embedding],
@@ -95,7 +94,6 @@ def query_doc(
 
 def get_doc(collection_name: str, user: UserModel = None):
     try:
-        log.debug(f"get_doc:doc {collection_name}")
         result = VECTOR_DB_CLIENT.get(collection_name=collection_name)
 
         if result:
@@ -118,7 +116,6 @@ def query_doc_with_hybrid_search(
     r: float,
 ) -> dict:
     try:
-        log.debug(f"query_doc_with_hybrid_search:doc {collection_name}")
         bm25_retriever = BM25Retriever.from_texts(
             texts=collection_result.documents[0],
             metadatas=collection_result.metadatas[0],
@@ -171,7 +168,6 @@ def query_doc_with_hybrid_search(
         )
         return result
     except Exception as e:
-        log.exception(f"Error querying doc {collection_name} with hybrid search: {e}")
         raise e
 
 
@@ -261,7 +257,6 @@ def query_collection(
 ) -> dict:
     results = []
     for query in queries:
-        log.debug(f"query_collection:query {query}")
         query_embedding = embedding_function(query, prefix=RAG_EMBEDDING_QUERY_PREFIX)
         for collection_name in collection_names:
             if collection_name:
@@ -297,9 +292,6 @@ def query_collection_with_hybrid_search(
     collection_results = {}
     for collection_name in collection_names:
         try:
-            log.debug(
-                f"query_collection_with_hybrid_search:VECTOR_DB_CLIENT.get:collection {collection_name}"
-            )
             collection_results[collection_name] = VECTOR_DB_CLIENT.get(
                 collection_name=collection_name
             )
@@ -621,9 +613,6 @@ def generate_openai_batch_embeddings(
     user: UserModel = None,
 ) -> Optional[list[list[float]]]:
     try:
-        log.debug(
-            f"generate_openai_batch_embeddings:model {model} batch size: {len(texts)}"
-        )
         json_data = {"input": texts, "model": model}
         if isinstance(RAG_EMBEDDING_PREFIX_FIELD_NAME, str) and isinstance(prefix, str):
             json_data[RAG_EMBEDDING_PREFIX_FIELD_NAME] = prefix
@@ -666,9 +655,6 @@ def generate_ollama_batch_embeddings(
     user: UserModel = None,
 ) -> Optional[list[list[float]]]:
     try:
-        log.debug(
-            f"generate_ollama_batch_embeddings:model {model} batch size: {len(texts)}"
-        )
         json_data = {"input": texts, "model": model}
         if isinstance(RAG_EMBEDDING_PREFIX_FIELD_NAME, str) and isinstance(prefix, str):
             json_data[RAG_EMBEDDING_PREFIX_FIELD_NAME] = prefix

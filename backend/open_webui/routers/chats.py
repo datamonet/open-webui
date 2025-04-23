@@ -579,12 +579,7 @@ async def clone_chat_by_id(
 
 @router.post("/{id}/clone/shared", response_model=Optional[ChatResponse])
 async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
-
-    if user.role == "admin":
-        chat = Chats.get_chat_by_id(id)
-    else:
-        chat = Chats.get_chat_by_share_id(id)
-
+    chat = Chats.get_chat_by_share_id(id)
     if chat:
         updated_chat = {
             **chat.chat,

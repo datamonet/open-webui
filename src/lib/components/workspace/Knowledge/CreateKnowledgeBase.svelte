@@ -12,7 +12,7 @@
 
 	let name = '';
 	let description = '';
-	let accessControl = {};
+	let accessControl = null;
 
 	const submitHandler = async () => {
 		loading = true;

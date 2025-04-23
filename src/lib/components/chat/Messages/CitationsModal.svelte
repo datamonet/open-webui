@@ -45,14 +45,6 @@
 			);
 		}
 	}
-
-	const decodeString = (str: string) => {
-		try {
-			return decodeURIComponent(str);
-		} catch (e) {
-			return str;
-		}
-	};
 </script>
 
 <Modal size="lg" bind:show>
@@ -107,7 +99,7 @@
 												: `#`}
 										target="_blank"
 									>
-										{decodeString(document?.metadata?.name ?? document.source.name)}
+										{decodeURIComponent(document?.metadata?.name ?? document.source.name)}
 									</a>
 									{#if document?.metadata?.page}
 										<span class="text-xs text-gray-500 dark:text-gray-400">

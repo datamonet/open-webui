@@ -453,7 +453,7 @@ async def generate_queries(
         template = request.app.state.config.QUERY_GENERATION_PROMPT_TEMPLATE
     else:
         template = DEFAULT_QUERY_GENERATION_PROMPT_TEMPLATE
-
+        
     content = query_generation_template(
         template, form_data["messages"], {"name": user.name}
     )
