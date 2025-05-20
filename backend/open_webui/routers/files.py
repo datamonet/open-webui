@@ -151,20 +151,21 @@ def upload_file(
                             ProcessFileForm(file_id=id, content=result.get("text", "")),
                             user=user,
                         )
-                    elif file.content_type not in [
-                        "image/png",
-                        "image/jpeg",
-                        "image/gif",
-                        "video/mp4",
-                        "video/ogg",
-                        "video/quicktime",
-                    ]:
-                        process_file(request, ProcessFileForm(file_id=id), user=user)
-                else:
-                    log.info(
-                        f"File type {file.content_type} is not provided, but trying to process anyway"
-                    )
-                    process_file(request, ProcessFileForm(file_id=id), user=user)
+                        # takin code:暂时关闭这里的向量处理
+                    # elif file.content_type not in [
+                    #     "image/png",
+                    #     "image/jpeg",
+                    #     "image/gif",
+                    #     "video/mp4",
+                    #     "video/ogg",
+                    #     "video/quicktime",
+                    # ]:
+                    #     process_file(request, ProcessFileForm(file_id=id), user=user)
+                # else:
+                #     log.info(
+                #         f"File type {file.content_type} is not provided, but trying to process anyway"
+                #     )
+                #     process_file(request, ProcessFileForm(file_id=id), user=user)
 
                 file_item = Files.get_file_by_id(id=id)
             except Exception as e:
