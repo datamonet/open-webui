@@ -200,15 +200,14 @@ def get_current_user(
         HTTPException: 当认证失败时
     """
     # 1. 获取tokens
-    webui_token = None
     takin_token = get_token(request)  # 从cookie中获取takin token
     
     # 获取webui token的优先级：Authorization header > cookies
-    if auth_token is not None:
-        webui_token = auth_token.credentials
+    if takin_token is None:
+        takin_token = auth_token.credentials
         
-    if webui_token is None and "token" in request.cookies:
-        webui_token = request.cookies.get("token")
+    if takin_token is None and "token" in request.cookies:
+        takin_token = request.cookies.get("token")
     
     # 2. 验证takin用户信息
     takin_user = None
@@ -221,43 +220,12 @@ def get_current_user(
             return None
         takin_user = response.json().get('data')
     
-    # 3. 处理API key的特殊情况
-    # auth by api key
-    if webui_token is not None and webui_token.startswith("sk-"):
-        if not request.state.enable_api_key:
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.API_KEY_NOT_ALLOWED
-            )
-
-        if request.app.state.config.ENABLE_API_KEY_ENDPOINT_RESTRICTIONS:
-            allowed_paths = [
-                path.strip()
-                for path in str(
-                    request.app.state.config.API_KEY_ALLOWED_ENDPOINTS
-                ).split(",")
-            ]
-
-            # Check if the request path matches any allowed endpoint.
-            if not any(
-                request.url.path == allowed
-                or request.url.path.startswith(allowed + "/")
-                for allowed in allowed_paths
-            ):
-                raise HTTPException(
-                    status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.API_KEY_NOT_ALLOWED
-                )
-
-        return get_current_user_by_api_key(webui_token)
-    
     # 4. token解析和用户验证
     try:
         user_data = None
         if takin_token:  # 优先使用takin token
             user_data = decode_token(takin_token)
             user = Users.get_user_by_email(user_data["email"])
-        elif webui_token:  # 降级使用webui token
-            user_data = decode_token(webui_token)
-            user = Users.get_user_by_id(user_data["id"])
         else:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -301,6 +269,14 @@ def get_current_user_by_api_key(api_key: str):
             detail=ERROR_MESSAGES.INVALID_TOKEN,
         )
     else:
+        # Add user info to current span
+        current_span = trace.get_current_span()
+        if current_span:
+            current_span.set_attribute("client.user.id", user.id)
+            current_span.set_attribute("client.user.email", user.email)
+            current_span.set_attribute("client.user.role", user.role)
+            current_span.set_attribute("client.auth.type", "api_key")
+
         Users.update_user_last_active_by_id(user.id)
 
     return user

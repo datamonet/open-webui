@@ -3,7 +3,7 @@ import shutil
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import BinaryIO, Tuple
+from typing import BinaryIO, Tuple, Dict
 
 import boto3
 from botocore.config import Config
@@ -17,6 +17,7 @@ from open_webui.config import (
     S3_SECRET_ACCESS_KEY,
     S3_USE_ACCELERATE_ENDPOINT,
     S3_ADDRESSING_STYLE,
+    S3_ENABLE_TAGGING,
     GCS_BUCKET_NAME,
     GOOGLE_APPLICATION_CREDENTIALS_JSON,
     AZURE_STORAGE_ENDPOINT,
@@ -44,7 +45,9 @@ class StorageProvider(ABC):
         pass
 
     @abstractmethod
-    def upload_file(self, file: BinaryIO, filename: str) -> Tuple[bytes, str]:
+    def upload_file(
+        self, file: BinaryIO, filename: str, tags: Dict[str, str]
+    ) -> Tuple[bytes, str]:
         pass
 
     @abstractmethod
@@ -153,9 +156,16 @@ class S3StorageProvider(StorageProvider):
                 s3_key = os.path.join(self.key_prefix, s3_key)
                 
             self.s3_client.upload_file(file_path, self.bucket_name, s3_key)
+            if S3_ENABLE_TAGGING and tags:
+                tagging = {"TagSet": [{"Key": k, "Value": v} for k, v in tags.items()]}
+                self.s3_client.put_object_tagging(
+                    Bucket=self.bucket_name,
+                    Key=s3_key,
+                    Tagging=tagging,
+                )
             return (
                 open(file_path, "rb").read(),
-                "s3://" + self.bucket_name + "/" + s3_key,
+                f"s3://{self.bucket_name}/{s3_key}",
             )
         except ClientError as e:
             raise RuntimeError(f"Error uploading file to S3: {e}")
@@ -298,9 +308,11 @@ class AzureStorageProvider(StorageProvider):
             self.container_name
         )
 
-    def upload_file(self, file: BinaryIO, filename: str) -> Tuple[bytes, str]:
+    def upload_file(
+        self, file: BinaryIO, filename: str, tags: Dict[str, str]
+    ) -> Tuple[bytes, str]:
         """Handles uploading of the file to Azure Blob Storage."""
-        contents, file_path = LocalStorageProvider.upload_file(file, filename)
+        contents, file_path = LocalStorageProvider.upload_file(file, filename, tags)
         try:
             blob_client = self.container_client.get_blob_client(filename)
             blob_client.upload_blob(contents, overwrite=True)

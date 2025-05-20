@@ -28,14 +28,15 @@
 		isLastActiveTab,
 		isApp,
 		appInfo,
-		toolServers
+		toolServers,
+		playingNotificationSound
 	} from '$lib/stores';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { Toaster, toast } from 'svelte-sonner';
 
 	import { executeToolServer, getBackendConfig } from '$lib/apis';
-	import { getSessionUser } from '$lib/apis/auths';
+	import { getSessionUser, userSignOut } from '$lib/apis/auths';
 
 	import '../tailwind.css';
 	import '../app.css';
@@ -50,11 +51,22 @@
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import { chatCompletion } from '$lib/apis/openai';
 
+	import { beforeNavigate } from '$app/navigation';
+	import { updated } from '$app/state';
+
+	// handle frontend updates (https://svelte.dev/docs/kit/configuration#version)
+	beforeNavigate(({ willUnload, to }) => {
+		if (updated.current && !willUnload && to?.url) {
+			location.href = to.url.href;
+		}
+	});
+
 	setContext('i18n', i18n);
 
 	const bc = new BroadcastChannel('active-tab-channel');
 
 	let loaded = false;
+	let tokenTimer = null;
 
 	const BREAKPOINT = 768;
 
@@ -260,9 +272,19 @@
 				const { done, content, title } = data;
 
 				if (done) {
+					if ($settings?.notificationSoundAlways ?? false) {
+						playingNotificationSound.set(true);
+
+						const audio = new Audio(`/audio/notification.mp3`);
+						audio.play().finally(() => {
+							// Ensure the global state is reset after the sound finishes
+							playingNotificationSound.set(false);
+						});
+					}
+
 					if ($isLastActiveTab) {
 						if ($settings?.notificationEnabled ?? false) {
-							new Notification(`${title} | Open WebUI`, {
+							new Notification(`${title} • Open WebUI`, {
 								body: content,
 								icon: `${WEBUI_BASE_URL}/static/favicon.png`
 							});
@@ -411,7 +433,7 @@
 			if (type === 'message') {
 				if ($isLastActiveTab) {
 					if ($settings?.notificationEnabled ?? false) {
-						new Notification(`${data?.user?.name} (#${event?.channel?.name}) | Open WebUI`, {
+						new Notification(`${data?.user?.name} (#${event?.channel?.name}) • Open WebUI`, {
 							body: data?.content,
 							icon: data?.user?.profile_image_url ?? `${WEBUI_BASE_URL}/static/favicon.png`
 						});
@@ -430,6 +452,24 @@
 					unstyled: true
 				});
 			}
+		}
+	};
+
+	const checkTokenExpiry = async () => {
+		const exp = $user?.expires_at; // token expiry time in unix timestamp
+		const now = Math.floor(Date.now() / 1000); // current time in unix timestamp
+
+		if (!exp) {
+			// If no expiry time is set, do nothing
+			return;
+		}
+
+		if (now >= exp) {
+			const res = await userSignOut();
+			user.set(null);
+			localStorage.removeItem('token');
+
+			location.href = res?.redirect_url ?? '/auth';
 		}
 	};
 
@@ -532,9 +572,10 @@
 			await WEBUI_NAME.set(backendConfig.name);
 
 			if ($config) {
+		
 				// 根据配置初始化WebSocket连接
 				await setupSocket($config.features?.enable_websocket ?? true);
-
+				console.log('sessionUser',localStorage.token);
 				// takin code：尝试获取当前会话用户信息，使用本地存储的token
 				const sessionUser = await getSessionUser(localStorage.token).catch((error) => {			
 					// 如果获取失败，返回null（可能是token无效或过期）
@@ -558,8 +599,8 @@
 					$socket?.on('channel-events', channelEventHandler); // 处理频道相关事件
 
 					// 更新全局状态
-					await user.set(sessionUser);          // 保存用户信息到store
-					await config.set(await getBackendConfig()); // 获取并保存后端配置
+					user.set(sessionUser);          // 保存用户信息到store
+					config.set(await getBackendConfig()); // 获取并保存后端配置
 				} else {
 					// 如果获取用户信息失败（未登录或session过期）
 					
@@ -647,4 +688,5 @@
 			: 'light'}
 	richColors
 	position="top-right"
+	closeButton
 />
