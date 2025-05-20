@@ -413,7 +413,7 @@ async def update_database(event_data, request_info):
                 # 追加新的消息内容
                 content += event_data.get("data", {}).get("content", "")
                 # 异步更新消息内容
-                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                Chats.upsert_message_to_chat_by_id_and_message_id(
                     request_info["chat_id"],
                     request_info["message_id"],
                     {"content": content},
@@ -422,14 +422,14 @@ async def update_database(event_data, request_info):
                 log.error(f"Error processing message update: {e}")
                 # 如果获取消息失败，仍然尝试保存新内容
                 content = event_data.get("data", {}).get("content", "")
-                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                Chats.upsert_message_to_chat_by_id_and_message_id(
                     request_info["chat_id"],
                     request_info["message_id"],
                     {"content": content},
                 )
         elif event_data["type"] == "replace":
             content = event_data.get("data", {}).get("content", "")
-            await Chats.upsert_message_to_chat_by_id_and_message_id(
+            Chats.upsert_message_to_chat_by_id_and_message_id(
                 request_info["chat_id"],
                 request_info["message_id"],
                 {"content": content},
