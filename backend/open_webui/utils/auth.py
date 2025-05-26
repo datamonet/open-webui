@@ -121,6 +121,8 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 # takin code
 use_secure_cookies = os.getenv("ENV") == "prod"
+domain = os.getenv("DOMAIN") if os.getenv("DOMAIN") else '.takin.ai'
+
 takin_cookie_name = '__Secure-authjs.session-token' if use_secure_cookies else "authjs.session-token"
 # takin code：从请求中获取token
 def get_token(request: Request) -> str:
@@ -132,7 +134,7 @@ def del_token(response: Response):
     response.delete_cookie(
         key=takin_cookie_name,
         path='/',
-        domain='.takin.ai' if use_secure_cookies else None,
+        domain=domain if use_secure_cookies else None,
         secure=use_secure_cookies,
         httponly=True,
         samesite='lax'
